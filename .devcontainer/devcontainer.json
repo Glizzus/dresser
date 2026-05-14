@@ -1,0 +1,22 @@
+
+{
+    "name": "Dresser",
+    "dockerComposeFile": "compose.yaml",
+    "service": "dev",
+    "workspaceFolder": "/workspace/dresser",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+            "moby": false
+       }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "redhat.vscode-yaml",
+                "Vue.volar"
+            ]
+        }
+    },
+
+    "postStartCommand": ".devcontainer/post-start.sh"
+}

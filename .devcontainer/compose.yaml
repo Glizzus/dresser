@@ -1,0 +1,11 @@
+services:
+  dev:
+    build:
+      context: .
+    command: ['sleep', 'infinity']
+    volumes:
+      - ../..:/workspace
+      - claude-code-data:/home/vscode/.claude
+
+volumes:
+  claude-code-data:
