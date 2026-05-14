@@ -10,8 +10,10 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@primeuix/themes": "^2.0.3",
     "@supabase/supabase-js": "^2.47.10",
     "@tanstack/vue-query": "^5.62.16",
+    "primevue": "^4.5.5",
     "vue": "^3.5.13"
   },
   "devDependencies": {

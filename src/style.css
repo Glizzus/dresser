@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #F4F2EC;
+  -webkit-font-smoothing: antialiased;
+  color: #16161C;
+  font-family: -apple-system, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+}
+
+#app {
+  height: 100%;
+}
+
+.wt, .wt * {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+.wt {
+  font-feature-settings: "ss01", "cv11";
+}
+.wt button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.wt-fade-in { animation: wtFadeIn .22s ease-out; }
+@keyframes wtFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.wt-sheet-in { animation: wtSheetIn .26s cubic-bezier(.2,.7,.2,1); }
+@keyframes wtSheetIn {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.wt-backdrop-in { animation: wtBackdropIn .2s ease-out; }
+@keyframes wtBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.wt-toast-in { animation: wtToastIn .35s cubic-bezier(.2,.7,.2,1); }
+@keyframes wtToastIn {
+  from { opacity: 0; transform: translateY(-12px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+.wt-press { transition: transform .08s ease-out, opacity .15s; }
+.wt-press:active { transform: scale(.97); opacity: .85; }
+.wt-row-press:active { background: #F8F7F2; }
+
+.wt-scroll { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.wt-scroll::-webkit-scrollbar { display: none; }
+.wt-scroll { scrollbar-width: none; }
