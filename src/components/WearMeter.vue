@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { T } from '../lib/tokens'
 
 const props = withDefaults(
   defineProps<{
@@ -15,9 +14,6 @@ const ratio = computed(() => props.wears / props.lim)
 const dirty = computed(() => props.wears >= props.lim)
 const warn = computed(() => !dirty.value && ratio.value >= 0.5)
 
-const cellW = computed(() => (props.size === 'sm' ? 5 : 6))
-const cellH = computed(() => (props.size === 'sm' ? 16 : 22))
-
 const cells = computed(() =>
   Array.from({ length: props.lim }, (_, i) => i < props.wears),
 )
@@ -28,44 +24,25 @@ const label = computed(() => {
   return `${props.lim - props.wears} left`
 })
 
-const cellColor = (filled: boolean) => {
-  if (!filled) return T.ring
-  if (dirty.value) return T.warn
-  if (warn.value) return T.dirty
-  return T.ink
+const cellClass = (filled: boolean) => {
+  if (!filled) return null
+  if (dirty.value) return 'wt-meter__cell--dirty'
+  if (warn.value) return 'wt-meter__cell--warn'
+  return 'wt-meter__cell--filled'
 }
 </script>
 
 <template>
-  <div
-    :style="{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'flex-end',
-      gap: '4px',
-    }"
-  >
-    <div :style="{ display: 'flex', gap: '2px' }">
+  <div class="wt-meter" :class="size === 'sm' && 'wt-meter--sm'">
+    <div class="wt-meter__cells">
       <div
         v-for="(filled, i) in cells"
         :key="i"
-        :style="{
-          width: `${cellW}px`,
-          height: `${cellH}px`,
-          borderRadius: '1.5px',
-          background: cellColor(filled),
-        }"
+        class="wt-meter__cell"
+        :class="cellClass(filled)"
       />
     </div>
-    <div
-      :style="{
-        fontSize: '10px',
-        color: dirty ? T.warn : T.sub,
-        fontWeight: 600,
-        letterSpacing: '0.3px',
-        textTransform: 'uppercase',
-      }"
-    >
+    <div class="wt-meter__label" :class="dirty && 'wt-meter__label--dirty'">
       {{ label }}
     </div>
   </div>

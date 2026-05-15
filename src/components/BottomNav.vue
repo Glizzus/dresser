@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import OverlayBadge from 'primevue/overlaybadge'
-import { T } from '../lib/tokens'
 import type { Tab } from '../lib/types'
-import { IconCheck, IconPulse, IconStack } from './icons'
 
 withDefaults(
   defineProps<{
@@ -14,38 +12,21 @@ withDefaults(
 
 const emit = defineEmits<{ setTab: [t: Tab] }>()
 
-const items: { id: Tab; label: string; icon: typeof IconCheck }[] = [
-  { id: 'today', label: 'Today', icon: IconCheck },
-  { id: 'inv', label: 'Inventory', icon: IconStack },
-  { id: 'status', label: 'Status', icon: IconPulse },
+const items: { id: Tab; label: string; icon: string }[] = [
+  { id: 'today', label: 'Today', icon: 'pi pi-check-circle' },
+  { id: 'inv', label: 'Inventory', icon: 'pi pi-box' },
+  { id: 'status', label: 'Status', icon: 'pi pi-chart-bar' },
 ]
 </script>
 
 <template>
-  <div
-    :style="{
-      borderTop: `0.5px solid ${T.divStrong}`,
-      background: 'rgba(244,242,236,0.92)',
-      backdropFilter: 'blur(16px) saturate(140%)',
-      WebkitBackdropFilter: 'blur(16px) saturate(140%)',
-      display: 'flex',
-      padding: '6px 8px calc(env(safe-area-inset-bottom) + 12px)',
-    }"
-  >
+  <div class="wt-bottom-nav">
     <button
       v-for="it in items"
       :key="it.id"
       type="button"
-      :style="{
-        flex: 1,
-        padding: '7px 4px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '3px',
-        color: tab === it.id ? T.ink : T.sub,
-        position: 'relative',
-      }"
+      class="wt-bottom-nav__btn"
+      :class="tab === it.id && 'wt-bottom-nav__btn--active'"
       @click="emit('setTab', it.id)"
     >
       <OverlayBadge
@@ -54,18 +35,10 @@ const items: { id: Tab; label: string; icon: typeof IconCheck }[] = [
         severity="danger"
         size="small"
       >
-        <component :is="it.icon" :active="tab === it.id" />
+        <i :class="['wt-bottom-nav__icon', it.icon]" />
       </OverlayBadge>
-      <component :is="it.icon" v-else :active="tab === it.id" />
-      <span
-        :style="{
-          fontSize: '11px',
-          fontWeight: tab === it.id ? 600 : 500,
-          letterSpacing: '0.1px',
-        }"
-      >
-        {{ it.label }}
-      </span>
+      <i v-else :class="['wt-bottom-nav__icon', it.icon]" />
+      <span class="wt-bottom-nav__label">{{ it.label }}</span>
     </button>
   </div>
 </template>

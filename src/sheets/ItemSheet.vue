@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import Button from 'primevue/button'
+import Drawer from 'primevue/drawer'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
+import SelectButton from 'primevue/selectbutton'
 import Card from '../components/Card.vue'
+import CategoryPicker from '../components/CategoryPicker.vue'
 import Field from '../components/Field.vue'
-import Pill from '../components/Pill.vue'
-import Segmented from '../components/Segmented.vue'
-import Sheet from '../components/Sheet.vue'
 import WearMeter from '../components/WearMeter.vue'
-import { CATEGORIES, isClean } from '../lib/data'
-import { T } from '../lib/tokens'
+import { isClean } from '../lib/data'
 import type { Item, Location } from '../lib/types'
 
 const props = defineProps<{
@@ -25,6 +24,11 @@ const emit = defineEmits<{
   markClean: [id: string]
 }>()
 
+const visible = ref(true)
+watch(visible, (v) => {
+  if (!v) emit('close')
+})
+
 const isNew = computed(() => !props.item)
 
 const name = ref(props.item?.name ?? '')
@@ -33,12 +37,6 @@ const loc = ref<Location>(props.item?.loc ?? 'a')
 const lim = ref<number>(props.item?.lim ?? 2)
 
 const canSave = computed(() => name.value.trim().length > 0 && cats.value.length > 0)
-
-const toggleCat = (c: string) => {
-  cats.value = cats.value.includes(c)
-    ? cats.value.filter((x) => x !== c)
-    : [...cats.value, c]
-}
 
 const onSave = () => {
   if (!canSave.value) return
@@ -51,7 +49,7 @@ const onSave = () => {
   })
 }
 
-const segmentedOptions = [
+const locOptions = [
   { id: 'a', label: 'House A' },
   { id: 'b', label: 'House B' },
   { id: 'transit', label: 'In transit' },
@@ -59,16 +57,9 @@ const segmentedOptions = [
 </script>
 
 <template>
-  <Sheet height="92%" @close="emit('close')">
-    <div
-      :style="{
-        display: 'flex',
-        justifyContent: 'space-between',
-        padding: '4px 16px 0',
-        alignItems: 'center',
-      }"
-    >
-      <Button label="Cancel" severity="secondary" variant="text" size="small" @click="emit('close')" />
+  <Drawer v-model:visible="visible" position="bottom" class="wt-drawer-tall">
+    <div class="wt-sheet-bar">
+      <Button label="Cancel" severity="secondary" variant="text" size="small" @click="visible = false" />
       <Button
         label="Save"
         severity="contrast"
@@ -79,43 +70,27 @@ const segmentedOptions = [
       />
     </div>
 
-    <div :style="{ padding: '4px 20px 12px' }">
-      <div :style="{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.5px' }">
-        {{ isNew ? 'New item' : 'Edit item' }}
-      </div>
+    <div class="wt-sheet-title">
+      {{ isNew ? 'New item' : 'Edit item' }}
     </div>
 
-    <div
-      class="wt-scroll"
-      :style="{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }"
-    >
+    <div class="wt-scroll wt-sheet-scroll">
       <Field label="Name">
-        <InputText
-          v-model="name"
-          placeholder="e.g. Grey crew tee"
-          fluid
-        />
+        <InputText v-model="name" placeholder="e.g. Grey crew tee" fluid />
       </Field>
 
-      <Field label="Categories">
-        <div :style="{ display: 'flex', flexWrap: 'wrap', gap: '6px' }">
-          <Pill
-            v-for="c in CATEGORIES"
-            :key="c"
-            :active="cats.includes(c)"
-            size="sm"
-            @press="toggleCat(c)"
-          >
-            {{ c }}
-          </Pill>
-        </div>
+      <Field label="Category">
+        <CategoryPicker v-model="cats" />
       </Field>
 
       <Field label="Location">
-        <Segmented
-          :value="loc"
-          :options="segmentedOptions"
-          @change="(v) => (loc = v as Location)"
+        <SelectButton
+          v-model="loc"
+          :options="locOptions"
+          option-label="label"
+          option-value="id"
+          :allow-empty="false"
+          fluid
         />
       </Field>
 
@@ -128,37 +103,24 @@ const segmentedOptions = [
           :max="12"
           suffix=" wears"
           fluid
-          :pt="{ pcInputText: { root: { style: { textAlign: 'center', fontWeight: 700 } } } }"
         >
-          <template #incrementbuttonicon>
-            <span>+</span>
-          </template>
-          <template #decrementbuttonicon>
-            <span>−</span>
-          </template>
+          <template #incrementbuttonicon><span>+</span></template>
+          <template #decrementbuttonicon><span>−</span></template>
         </InputNumber>
       </Field>
 
       <Field v-if="!isNew && item" label="Current state">
-        <Card :padding="14">
-          <div
-            :style="{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }"
-          >
+        <Card :pad="14">
+          <div class="wt-item-state-row">
             <div>
-              <div :style="{ fontSize: '16px', fontWeight: 600, letterSpacing: '-0.2px' }">
-                {{ item.w }} / {{ item.lim }} wears
-              </div>
-              <div :style="{ fontSize: '12.5px', color: T.sub, marginTop: '2px' }">
+              <div class="wt-item-state-line">{{ item.w }} / {{ item.lim }} wears</div>
+              <div class="wt-item-state-detail">
                 {{ isClean(item) ? 'clean' : 'dirty' }}
               </div>
             </div>
             <WearMeter :wears="item.w" :lim="item.lim" />
           </div>
-          <div :style="{ marginTop: '12px' }">
+          <div class="wt-inv-group__body">
             <Button
               v-if="isClean(item)"
               label="Mark dirty"
@@ -179,10 +141,7 @@ const segmentedOptions = [
         </Card>
       </Field>
 
-      <div
-        v-if="!isNew && item"
-        :style="{ padding: '12px 0 32px', textAlign: 'center' }"
-      >
+      <div v-if="!isNew && item" class="wt-item-delete-row">
         <Button
           label="Delete item"
           severity="danger"
@@ -192,5 +151,5 @@ const segmentedOptions = [
         />
       </div>
     </div>
-  </Sheet>
+  </Drawer>
 </template>

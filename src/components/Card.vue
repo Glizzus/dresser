@@ -1,39 +1,26 @@
 <script setup lang="ts">
-import { computed, type StyleValue } from 'vue'
-import PCard from 'primevue/card'
-import { T } from '../lib/tokens'
-
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    padding?: number | string
-    style?: StyleValue
+    inset?: boolean
+    pad?: 12 | 14 | 16 | 0
+    variant?: 'plain' | 'ok' | 'warn'
   }>(),
-  { padding: 0 },
-)
-
-const padding = computed(() =>
-  typeof props.padding === 'number' ? `${props.padding}px` : props.padding,
+  { inset: false, pad: 0, variant: 'plain' },
 )
 </script>
 
 <template>
-  <PCard
-    :style="props.style"
-    :pt="{
-      root: {
-        style: {
-          background: T.surface,
-          borderRadius: '16px',
-          boxShadow: `0 0 0 0.5px ${T.div}, 0 1px 2px rgba(20,20,28,0.04)`,
-          overflow: 'hidden',
-        },
-      },
-      body: { style: { padding } },
-      content: { style: { padding: 0 } },
-    }"
+  <div
+    class="wt-card"
+    :class="[
+      inset && 'wt-card--inset',
+      pad === 12 && 'wt-card--pad-12',
+      pad === 14 && 'wt-card--pad-14',
+      pad === 16 && 'wt-card--pad-16',
+      variant === 'ok' && 'wt-card--ok',
+      variant === 'warn' && 'wt-card--warn',
+    ]"
   >
-    <template #content>
-      <slot />
-    </template>
-  </PCard>
+    <slot />
+  </div>
 </template>

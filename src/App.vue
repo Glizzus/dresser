@@ -4,7 +4,6 @@ import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import BottomNav from './components/BottomNav.vue'
 import { useWardrobe } from './composables/useWardrobe'
-import { T } from './lib/tokens'
 import type { HouseId, Item, Tab } from './lib/types'
 import LaundrySheet from './sheets/LaundrySheet.vue'
 import ItemSheet from './sheets/ItemSheet.vue'
@@ -76,15 +75,7 @@ watch(toast, (t) => {
 </script>
 
 <template>
-  <div
-    class="wt"
-    :style="{
-      position: 'fixed',
-      inset: 0,
-      background: T.bg,
-      overflow: 'hidden',
-    }"
-  >
+  <div class="wt wt-app">
     <TodayView
       v-if="tab === 'today'"
       :items="state.items"
@@ -116,15 +107,7 @@ watch(toast, (t) => {
       @open-laundry="onOpenLaundry"
     />
 
-    <div
-      :style="{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 40,
-      }"
-    >
+    <div class="wt-nav-anchor">
       <BottomNav :tab="tab" :status-badge="currentBadge" @set-tab="(t) => (tab = t)" />
     </div>
 

@@ -7,22 +7,25 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest"
   },
   "dependencies": {
     "@primeuix/themes": "^2.0.3",
     "@supabase/supabase-js": "^2.47.10",
     "@tanstack/vue-query": "^5.62.16",
+    "primeicons": "^7.0.0",
     "primevue": "^4.5.5",
     "vue": "^3.5.13"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
     "@vitejs/plugin-vue": "^5.2.1",
-    "tailwindcss": "^4.0.0",
+    "@vue/test-utils": "^2.4.10",
+    "happy-dom": "^20.9.0",
     "typescript": "~5.7.2",
     "vite": "^6.0.7",
     "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^4.1.6",
     "vue-tsc": "^2.2.0"
   }
 }

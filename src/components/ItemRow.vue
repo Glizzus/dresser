@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { isClean } from '../lib/data'
-import { T } from '../lib/tokens'
 import type { Item } from '../lib/types'
 import WearMeter from './WearMeter.vue'
 
 export interface SwipeAction {
   label: string
-  icon?: unknown
+  icon?: string
   danger?: boolean
   onPress: () => void
 }
@@ -87,62 +86,28 @@ const handleClick = (e: MouseEvent) => {
 }
 
 const isItemClean = computed(() => isClean(props.item))
+const padStyle = computed(() => ({ transform: `translateX(${offset.value}px)` }))
 </script>
 
 <template>
-  <div
-    :style="{
-      position: 'relative',
-      overflow: 'hidden',
-      background: T.surface,
-      borderBottom: !isLast ? `0.5px solid ${T.div}` : 'none',
-      touchAction: 'pan-y',
-    }"
-  >
-    <div
-      v-if="swipeActions.length > 0"
-      :style="{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-      }"
-    >
+  <div class="wt-row" :class="isLast && 'wt-row--last'">
+    <div v-if="swipeActions.length > 0" class="wt-row__actions">
       <button
         v-for="(a, i) in swipeActions"
         :key="i"
         type="button"
-        :style="{
-          width: '80px',
-          background: a.danger ? T.warn : T.ink2,
-          color: '#fff',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          fontSize: '12px',
-          fontWeight: 600,
-          letterSpacing: '0.1px',
-        }"
+        class="wt-row__action"
+        :class="a.danger && 'wt-row__action--danger'"
         @click="runAction(a)"
       >
-        <component :is="a.icon" v-if="a.icon" />
+        <i v-if="a.icon" :class="a.icon" />
         <span>{{ a.label }}</span>
       </button>
     </div>
     <div
-      class="wt-row-press"
-      :style="{
-        background: T.surface,
-        padding: '12px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        transform: `translateX(${offset}px)`,
-        transition: startX !== null ? 'none' : 'transform .22s cubic-bezier(.2,.7,.2,1)',
-      }"
+      class="wt-row__pad"
+      :class="startX !== null && 'wt-row__pad--dragging'"
+      :style="padStyle"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"
@@ -151,49 +116,23 @@ const isItemClean = computed(() => isClean(props.item))
     >
       <div
         v-if="toggleable"
-        :style="{
-          width: '24px',
-          height: '24px',
-          borderRadius: '7px',
-          flexShrink: 0,
-          background: checked ? T.ink : T.surface,
-          boxShadow: checked ? 'none' : `inset 0 0 0 1.5px ${T.divStrong}`,
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '14px',
-          transition: 'background .12s',
-        }"
+        class="wt-row__checkbox"
+        :class="checked && 'wt-row__checkbox--checked'"
       >
         <template v-if="checked">✓</template>
       </div>
-      <div :style="{ flex: 1, minWidth: 0 }">
+      <div class="wt-row__body">
         <div
-          :style="{
-            fontSize: '16px',
-            fontWeight: 500,
-            letterSpacing: '-0.2px',
-            color: !isItemClean ? T.sub : T.ink,
-            textDecoration: !isItemClean ? 'line-through' : 'none',
-            textDecorationColor: T.faint,
-          }"
+          class="wt-row__name"
+          :class="!isItemClean && 'wt-row__name--dirty'"
         >
           {{ item.name }}
         </div>
-        <div
-          v-if="showCats"
-          :style="{
-            fontSize: '12.5px',
-            color: T.sub,
-            marginTop: '2px',
-            letterSpacing: '-0.05px',
-          }"
-        >
+        <div v-if="showCats" class="wt-row__cats">
           {{ item.cats.join(' · ') }}
         </div>
       </div>
-      <div :style="{ flexShrink: 0 }">
+      <div class="wt-row__trailing">
         <slot name="trailing">
           <WearMeter :wears="item.w" :lim="item.lim" />
         </slot>
