@@ -1,11 +1,23 @@
 <script setup lang="ts">
-defineProps<{ label: string; hint?: string }>()
+defineProps<{ label: string }>()
 </script>
 
 <template>
-  <div class="wt-field">
-    <div class="wt-field__label">{{ label }}</div>
+  <label class="field">
+    <span class="label">{{ label }}</span>
     <slot />
-    <div v-if="hint" class="wt-field__hint">{{ hint }}</div>
-  </div>
+  </label>
 </template>
+
+<style scoped>
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.label {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+</style>

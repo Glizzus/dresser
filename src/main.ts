@@ -1,31 +1,23 @@
 import { createApp } from 'vue'
-import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
-import PrimeVue from 'primevue/config'
-import ToastService from 'primevue/toastservice'
-import Aura from '@primeuix/themes/aura'
-import App from './App.vue'
+import { createPinia } from 'pinia'
+import { VueQueryPlugin } from '@tanstack/vue-query'
+import { router } from '@/router'
+import App from '@/App.vue'
 import './style.css'
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 1000 * 60,
-      retry: 1,
-    },
-  },
-})
-
 createApp(App)
-  .use(PrimeVue, {
-    theme: {
-      preset: Aura,
-      options: {
-        darkModeSelector: '.app-dark',
-        cssLayer: false,
+  .use(createPinia())
+  .use(router)
+  .use(VueQueryPlugin, {
+    queryClientConfig: {
+      defaultOptions: {
+        queries: {
+          staleTime: 30_000,
+          refetchOnWindowFocus: true,
+          refetchOnReconnect: true,
+          retry: 1,
+        },
       },
     },
   })
-  .use(ToastService)
-  .use(VueQueryPlugin, { queryClient })
   .mount('#app')

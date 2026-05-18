@@ -1,113 +1,114 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import Button from 'primevue/button'
-import Drawer from 'primevue/drawer'
-import Card from '../components/Card.vue'
-import { HOUSES, atHouse, dirtyAt, invariants, isClean } from '../lib/data'
-import type { HouseId, Item } from '../lib/types'
+// Did-laundry sheet — a per-house action. Shows the hamper grouped by
+// category; commit resets wears to 0 for dirty items at this house and
+// records a laundry_events row. No prediction line (out of scope).
+import { computed } from 'vue'
+import { useItems, useDoLaundry } from '@/queries'
+import { useUiStore } from '@/stores/ui'
+import { evaluateStatus } from '@engine/engine.ts'
+import { DEFAULT_INVARIANTS } from '@engine/invariants.ts'
 
-const props = defineProps<{
-  items: Item[]
-  house: HouseId
-}>()
+const emit = defineEmits<{ close: [] }>()
+const ui = useUiStore()
+const { data: items } = useItems()
+const doLaundry = useDoLaundry()
 
-const emit = defineEmits<{
-  close: []
-  confirm: []
-}>()
-
-const visible = ref(true)
-watch(visible, (v) => {
-  if (!v) emit('close')
-})
-
-const dirty = computed(() => dirtyAt(props.items, props.house))
-const before = computed(() => invariants(props.items, props.house))
-const after = computed(() =>
-  invariants(
-    props.items.map((it) =>
-      atHouse(it, props.house) && !isClean(it) ? { ...it, w: 0 } : it,
-    ),
-    props.house,
-  ),
+const house = computed(() => ui.currentHouse)
+const hamper = computed(
+  () =>
+    evaluateStatus(DEFAULT_INVARIANTS, items.value ?? [], house.value).hamper,
 )
-const brokenBefore = computed(
-  () => before.value.filter((i) => i.severity === 'broken').length,
+const total = computed(() =>
+  hamper.value.reduce((n, g) => n + g.items.length, 0),
 )
-const brokenAfter = computed(
-  () => after.value.filter((i) => i.severity === 'broken').length,
-)
-const fixed = computed(() => brokenBefore.value - brokenAfter.value)
 
-const groups = computed(() => {
-  const g: Record<string, Item[]> = {}
-  for (const it of dirty.value) {
-    const c = it.cats[0]
-    if (!g[c]) g[c] = []
-    g[c].push(it)
-  }
-  return Object.entries(g)
-})
+async function commit() {
+  const n = await doLaundry.mutateAsync(house.value)
+  ui.pushToast(
+    n > 0
+      ? `Washed ${n} item${n === 1 ? '' : 's'} at House ${house.value}`
+      : `Nothing to wash at House ${house.value}`,
+  )
+  emit('close')
+}
 </script>
 
 <template>
-  <Drawer v-model:visible="visible" position="bottom" class="wt-drawer">
-    <div class="wt-laundry-head">
-      <div class="wt-laundry-headline">Did laundry?</div>
-      <div class="wt-sheet-subtitle">
-        All dirty items at {{ HOUSES[house].name }} → clean.
+  <div class="sheet">
+    <div class="grab" />
+    <div class="head">
+      <h2>Did laundry · House {{ house }}</h2>
+      <button class="x" @click="emit('close')">Cancel</button>
+    </div>
+
+    <p v-if="total === 0" class="muted">
+      Nothing dirty at House {{ house }}.
+    </p>
+
+    <template v-else>
+      <p class="muted intro">
+        These will be reset to fresh:
+      </p>
+      <div v-for="g in hamper" :key="g.category" class="grp">
+        <div class="cat">{{ g.category }}</div>
+        <div class="names">
+          {{ g.items.map((i) => i.name).join(', ') }}
+        </div>
       </div>
-    </div>
+    </template>
 
-    <div class="wt-scroll wt-laundry-scroll">
-      <Card :pad="14" class="wt-laundry-card">
-        <div class="wt-status-row">
-          <div class="wt-laundry-headline">
-            {{ dirty.length }} item{{ dirty.length === 1 ? '' : 's' }}
-          </div>
-          <div class="wt-laundry-label">hamper</div>
-        </div>
-        <div class="wt-inv-group__body">
-          <div
-            v-for="[c, list] in groups"
-            :key="c"
-            class="wt-laundry-breakdown"
-          >
-            <span class="wt-laundry-breakdown__cat">{{ c }}</span>
-            <span class="wt-laundry-breakdown__ct">{{ list.length }}</span>
-          </div>
-        </div>
-      </Card>
-
-      <Card v-if="fixed > 0" :pad="12" variant="ok" class="wt-laundry-card">
-        <div class="wt-laundry-fixed">
-          <span class="wt-laundry-fixed__dot">✓</span>
-          Fixes {{ fixed }} broken invariant{{ fixed === 1 ? '' : 's' }}
-        </div>
-      </Card>
-
-      <Card v-if="dirty.length === 0" :pad="16" class="wt-laundry-card">
-        <div class="wt-laundry-empty">No dirty items here. Nothing to wash.</div>
-      </Card>
-    </div>
-
-    <div class="wt-sheet-foot">
-      <Button
-        fluid
-        size="large"
-        severity="contrast"
-        :disabled="dirty.length === 0"
-        :label="`Confirm · ${dirty.length} clean`"
-        @click="emit('confirm')"
-      />
-      <Button
-        fluid
-        size="large"
-        severity="secondary"
-        variant="outlined"
-        label="Cancel"
-        @click="visible = false"
-      />
-    </div>
-  </Drawer>
+    <button
+      class="btn btn-primary commit"
+      :disabled="total === 0 || doLaundry.isPending.value"
+      @click="commit"
+    >
+      Wash {{ total }} item{{ total === 1 ? '' : 's' }}
+    </button>
+  </div>
 </template>
+
+<style scoped>
+.sheet {
+  padding-bottom: 8px;
+}
+.grab {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 6px auto 10px;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.x {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+}
+.intro {
+  margin: 0 0 8px;
+}
+.grp {
+  display: flex;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.cat {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  min-width: 110px;
+}
+.names {
+  flex: 1;
+  font-size: 0.9rem;
+}
+.commit {
+  width: 100%;
+  margin-top: 20px;
+}
+</style>

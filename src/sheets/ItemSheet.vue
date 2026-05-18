@@ -1,155 +1,207 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import Button from 'primevue/button'
-import Drawer from 'primevue/drawer'
-import InputText from 'primevue/inputtext'
-import InputNumber from 'primevue/inputnumber'
-import SelectButton from 'primevue/selectbutton'
-import Card from '../components/Card.vue'
-import CategoryPicker from '../components/CategoryPicker.vue'
-import Field from '../components/Field.vue'
-import WearMeter from '../components/WearMeter.vue'
-import { isClean } from '../lib/data'
-import type { Item, Location } from '../lib/types'
+import { computed, ref, watchEffect } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  useItems,
+  useCategories,
+  useCreateItem,
+  useUpdateItem,
+  useDeleteItem,
+  useMarkClean,
+  useMarkDirty,
+} from '@/queries'
+import { useUiStore } from '@/stores/ui'
+import { isClean, type AppItem, type House, type ItemDraft } from '@/lib/types'
+import Field from '@/components/Field.vue'
+import CategoryPicker from '@/components/CategoryPicker.vue'
 
-const props = defineProps<{
-  item?: Item | null
-}>()
+const emit = defineEmits<{ close: [] }>()
+const route = useRoute()
+const ui = useUiStore()
 
-const emit = defineEmits<{
-  close: []
-  save: [it: Partial<Item> & { id?: string }]
-  delete: [id: string]
-  markDirty: [id: string]
-  markClean: [id: string]
-}>()
+const { data: items } = useItems()
+const { data: categories } = useCategories()
+const createItem = useCreateItem()
+const updateItem = useUpdateItem()
+const deleteItem = useDeleteItem()
+const markClean = useMarkClean()
+const markDirty = useMarkDirty()
 
-const visible = ref(true)
-watch(visible, (v) => {
-  if (!v) emit('close')
+const id = computed(() =>
+  route.name === 'item-edit' ? String(route.params.id) : null,
+)
+const existing = computed<AppItem | undefined>(() =>
+  id.value ? items.value?.find((i) => i.id === id.value) : undefined,
+)
+
+const name = ref('')
+const house = ref<House>(ui.currentHouse)
+const wearLimit = ref(2)
+const categoryIds = ref<string[]>([])
+
+watchEffect(() => {
+  const e = existing.value
+  if (e) {
+    name.value = e.name
+    house.value = e.house
+    wearLimit.value = e.wearLimit
+    categoryIds.value = [...e.categoryIds]
+  }
 })
 
-const isNew = computed(() => !props.item)
+const draft = computed<ItemDraft>(() => ({
+  name: name.value.trim(),
+  house: house.value,
+  wearLimit: wearLimit.value,
+  categoryIds: categoryIds.value,
+}))
+const canSave = computed(() => draft.value.name.length > 0)
 
-const name = ref(props.item?.name ?? '')
-const cats = ref<string[]>([...(props.item?.cats ?? [])])
-const loc = ref<Location>(props.item?.loc ?? 'a')
-const lim = ref<number>(props.item?.lim ?? 2)
-
-const canSave = computed(() => name.value.trim().length > 0 && cats.value.length > 0)
-
-const onSave = () => {
+async function save() {
   if (!canSave.value) return
-  emit('save', {
-    ...(props.item ?? {}),
-    name: name.value.trim(),
-    cats: [...cats.value],
-    loc: loc.value,
-    lim: lim.value,
-  })
+  if (id.value) await updateItem.mutateAsync({ id: id.value, draft: draft.value })
+  else await createItem.mutateAsync(draft.value)
+  emit('close')
 }
-
-const locOptions = [
-  { id: 'a', label: 'House A' },
-  { id: 'b', label: 'House B' },
-  { id: 'transit', label: 'In transit' },
-]
+async function remove() {
+  if (!id.value) return
+  if (!confirm(`Delete "${name.value}"?`)) return
+  await deleteItem.mutateAsync(id.value)
+  emit('close')
+}
+async function toggleDirty() {
+  const e = existing.value
+  if (!e) return
+  if (isClean(e)) await markDirty.mutateAsync({ id: e.id, wearLimit: e.wearLimit })
+  else await markClean.mutateAsync(e.id)
+}
 </script>
 
 <template>
-  <Drawer v-model:visible="visible" position="bottom" class="wt-drawer-tall">
-    <div class="wt-sheet-bar">
-      <Button label="Cancel" severity="secondary" variant="text" size="small" @click="visible = false" />
-      <Button
-        label="Save"
-        severity="contrast"
-        variant="text"
-        size="small"
-        :disabled="!canSave"
-        @click="onSave"
+  <div class="sheet">
+    <div class="grab" />
+    <div class="head">
+      <h2>{{ id ? 'Edit item' : 'New item' }}</h2>
+      <button class="x" @click="emit('close')">Done</button>
+    </div>
+
+    <Field label="Name">
+      <input v-model="name" class="input" placeholder="e.g. Blue Oxford" />
+    </Field>
+
+    <Field label="Categories">
+      <CategoryPicker
+        v-model="categoryIds"
+        :options="categories ?? []"
       />
-    </div>
+    </Field>
 
-    <div class="wt-sheet-title">
-      {{ isNew ? 'New item' : 'Edit item' }}
-    </div>
-
-    <div class="wt-scroll wt-sheet-scroll">
-      <Field label="Name">
-        <InputText v-model="name" placeholder="e.g. Grey crew tee" fluid />
-      </Field>
-
-      <Field label="Category">
-        <CategoryPicker v-model="cats" />
-      </Field>
-
-      <Field label="Location">
-        <SelectButton
-          v-model="loc"
-          :options="locOptions"
-          option-label="label"
-          option-value="id"
-          :allow-empty="false"
-          fluid
-        />
-      </Field>
-
-      <Field label="Wear limit" hint="Counts as dirty after this many wears.">
-        <InputNumber
-          v-model="lim"
-          show-buttons
-          button-layout="horizontal"
-          :min="1"
-          :max="12"
-          suffix=" wears"
-          fluid
+    <Field label="Location">
+      <div class="seg">
+        <button
+          v-for="h in (['A', 'B', 'transit'] as House[])"
+          :key="h"
+          type="button"
+          :class="{ on: house === h }"
+          @click="house = h"
         >
-          <template #incrementbuttonicon><span>+</span></template>
-          <template #decrementbuttonicon><span>−</span></template>
-        </InputNumber>
-      </Field>
-
-      <Field v-if="!isNew && item" label="Current state">
-        <Card :pad="14">
-          <div class="wt-item-state-row">
-            <div>
-              <div class="wt-item-state-line">{{ item.w }} / {{ item.lim }} wears</div>
-              <div class="wt-item-state-detail">
-                {{ isClean(item) ? 'clean' : 'dirty' }}
-              </div>
-            </div>
-            <WearMeter :wears="item.w" :lim="item.lim" />
-          </div>
-          <div class="wt-inv-group__body">
-            <Button
-              v-if="isClean(item)"
-              label="Mark dirty"
-              severity="danger"
-              variant="outlined"
-              fluid
-              @click="emit('markDirty', item.id)"
-            />
-            <Button
-              v-else
-              label="Mark clean"
-              severity="success"
-              variant="outlined"
-              fluid
-              @click="emit('markClean', item.id)"
-            />
-          </div>
-        </Card>
-      </Field>
-
-      <div v-if="!isNew && item" class="wt-item-delete-row">
-        <Button
-          label="Delete item"
-          severity="danger"
-          variant="text"
-          size="small"
-          @click="emit('delete', item.id)"
-        />
+          {{ h === 'transit' ? 'In transit' : `House ${h}` }}
+        </button>
       </div>
-    </div>
-  </Drawer>
+    </Field>
+
+    <Field label="Wear limit">
+      <div class="stepper">
+        <button @click="wearLimit = Math.max(1, wearLimit - 1)">−</button>
+        <span>{{ wearLimit }} wear{{ wearLimit === 1 ? '' : 's' }}</span>
+        <button @click="wearLimit++">+</button>
+      </div>
+    </Field>
+
+    <button v-if="existing" class="btn linkish" @click="toggleDirty">
+      {{ isClean(existing) ? 'Mark dirty' : 'Mark clean' }}
+    </button>
+
+    <button class="btn btn-primary save" :disabled="!canSave" @click="save">
+      {{ id ? 'Save changes' : 'Add item' }}
+    </button>
+
+    <button v-if="id" class="btn delete" @click="remove">Delete item</button>
+  </div>
 </template>
+
+<style scoped>
+.sheet {
+  padding-bottom: 8px;
+}
+.grab {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 6px auto 10px;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.x {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+}
+.input {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  width: 100%;
+  min-height: var(--tap);
+}
+.seg {
+  display: flex;
+  gap: 8px;
+}
+.seg button {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 10px 0;
+  color: var(--ink-soft);
+}
+.seg button.on {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.stepper button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 1.2rem;
+}
+.linkish {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.save {
+  width: 100%;
+}
+.delete {
+  width: 100%;
+  margin-top: 10px;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: transparent;
+}
+</style>

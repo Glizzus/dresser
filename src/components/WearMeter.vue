@@ -1,49 +1,66 @@
 <script setup lang="ts">
+// Tiny row of dots + a plain-language label. Replaces any ambiguous
+// "0/2" fraction. Accent red is used ONLY for the dirty state.
 import { computed } from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    wears: number
-    lim: number
-    size?: 'sm' | 'md'
-  }>(),
-  { size: 'md' },
+const props = defineProps<{ wears: number; wearLimit: number }>()
+
+const dirty = computed(() => props.wears >= props.wearLimit)
+const dots = computed(() =>
+  Array.from({ length: props.wearLimit }, (_, i) => i < props.wears),
 )
-
-const ratio = computed(() => props.wears / props.lim)
-const dirty = computed(() => props.wears >= props.lim)
-const warn = computed(() => !dirty.value && ratio.value >= 0.5)
-
-const cells = computed(() =>
-  Array.from({ length: props.lim }, (_, i) => i < props.wears),
-)
-
 const label = computed(() => {
   if (dirty.value) return 'dirty'
   if (props.wears === 0) return 'fresh'
-  return `${props.lim - props.wears} left`
+  const left = props.wearLimit - props.wears
+  return `${left} wear${left === 1 ? '' : 's'} left`
 })
-
-const cellClass = (filled: boolean) => {
-  if (!filled) return null
-  if (dirty.value) return 'wt-meter__cell--dirty'
-  if (warn.value) return 'wt-meter__cell--warn'
-  return 'wt-meter__cell--filled'
-}
 </script>
 
 <template>
-  <div class="wt-meter" :class="size === 'sm' && 'wt-meter--sm'">
-    <div class="wt-meter__cells">
-      <div
-        v-for="(filled, i) in cells"
+  <span class="meter" :class="{ dirty }">
+    <span class="dots">
+      <span
+        v-for="(used, i) in dots"
         :key="i"
-        class="wt-meter__cell"
-        :class="cellClass(filled)"
+        class="dot"
+        :class="{ used }"
       />
-    </div>
-    <div class="wt-meter__label" :class="dirty && 'wt-meter__label--dirty'">
-      {{ label }}
-    </div>
-  </div>
+    </span>
+    <span class="lbl">{{ label }}</span>
+  </span>
 </template>
+
+<style scoped>
+.meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-soft);
+}
+.dot.used {
+  background: var(--ink-soft);
+}
+.dirty .dot {
+  border-color: var(--accent);
+}
+.dirty .dot.used {
+  background: var(--accent);
+}
+.lbl {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.dirty .lbl {
+  color: var(--accent);
+}
+</style>

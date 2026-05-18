@@ -16,8 +16,20 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "ignoreDeprecations": "5.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@engine/*": ["engine/*"]
+    },
     "types": ["vite/client", "vite-plugin-pwa/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "vite.config.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.vue",
+    "engine/**/*.ts",
+    "vite.config.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

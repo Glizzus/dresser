@@ -1,142 +1,166 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { isClean } from '../lib/data'
-import type { Item } from '../lib/types'
-import WearMeter from './WearMeter.vue'
+// Swipe a row LEFT to reveal: log a wear (daily driver), mark dirty,
+// move to the other house. Tap the row to edit.
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import type { AppItem, House } from '@/lib/types'
+import { isClean } from '@/lib/types'
+import { useSwipe } from '@/composables/useSwipe'
+import { useLogWear, useMarkDirty, useMoveItem } from '@/queries'
+import { useUiStore } from '@/stores/ui'
+import WearMeter from '@/components/WearMeter.vue'
 
-export interface SwipeAction {
-  label: string
-  icon?: string
-  danger?: boolean
-  onPress: () => void
+const props = defineProps<{ item: AppItem }>()
+
+const router = useRouter()
+const ui = useUiStore()
+const logWear = useLogWear()
+const markDirty = useMarkDirty()
+const moveItem = useMoveItem()
+
+const elRef = ref<HTMLElement | null>(null)
+const ACTIONS_WIDTH = 222
+const { offset, bind, close } = useSwipe(elRef, { maxOffset: ACTIONS_WIDTH })
+
+function setRef(node: Element | null) {
+  bind(node as HTMLElement | null)
 }
 
-const props = withDefaults(
-  defineProps<{
-    item: Item
-    checked?: boolean
-    toggleable?: boolean
-    swipeActions?: SwipeAction[]
-    showCats?: boolean
-    isLast?: boolean
-  }>(),
-  {
-    checked: false,
-    toggleable: false,
-    showCats: true,
-    isLast: false,
-    swipeActions: () => [],
-  },
-)
-
-const emit = defineEmits<{
-  toggle: []
-  open: []
-}>()
-
-const offset = ref(0)
-const startX = ref<number | null>(null)
-const open = ref(false)
-const actionsW = computed(() => props.swipeActions.length * 80)
-
-const onDown = (e: PointerEvent) => {
-  startX.value = e.clientX
-  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+const otherHouse = (): House => {
+  if (props.item.house === 'A') return 'B'
+  if (props.item.house === 'B') return 'A'
+  return ui.currentHouse // a transit item lands at the current house
 }
 
-const onMove = (e: PointerEvent) => {
-  if (startX.value == null) return
-  const dx = Math.min(0, e.clientX - startX.value + (open.value ? -actionsW.value : 0))
-  if (dx < -actionsW.value) return
-  offset.value = dx
+function onLogWear() {
+  logWear.mutate({ id: props.item.id, wears: props.item.wears })
+  ui.pushToast(`Logged a wear: ${props.item.name}`)
+  close()
 }
-
-const onUp = (e: PointerEvent) => {
-  if (startX.value == null) return
-  startX.value = null
-  if (offset.value < -actionsW.value * 0.4) {
-    offset.value = -actionsW.value
-    open.value = true
-  } else {
-    offset.value = 0
-    open.value = false
-  }
-  try {
-    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-  } catch {
-    // ignore
-  }
+function onMarkDirty() {
+  markDirty.mutate({ id: props.item.id, wearLimit: props.item.wearLimit })
+  close()
 }
-
-const runAction = (a: SwipeAction) => {
-  a.onPress()
-  offset.value = 0
-  open.value = false
+function onMove() {
+  const to = otherHouse()
+  moveItem.mutate({ id: props.item.id, house: to })
+  ui.pushToast(`${props.item.name} → House ${to}`)
+  close()
 }
-
-const handleClick = (e: MouseEvent) => {
-  if (open.value) {
-    e.preventDefault()
-    offset.value = 0
-    open.value = false
+function onTap() {
+  if (offset.value !== 0) {
+    close()
     return
   }
-  if (props.toggleable) emit('toggle')
-  else emit('open')
+  router.push(`/inventory/${props.item.id}`)
 }
-
-const isItemClean = computed(() => isClean(props.item))
-const padStyle = computed(() => ({ transform: `translateX(${offset.value}px)` }))
 </script>
 
 <template>
-  <div class="wt-row" :class="isLast && 'wt-row--last'">
-    <div v-if="swipeActions.length > 0" class="wt-row__actions">
-      <button
-        v-for="(a, i) in swipeActions"
-        :key="i"
-        type="button"
-        class="wt-row__action"
-        :class="a.danger && 'wt-row__action--danger'"
-        @click="runAction(a)"
-      >
-        <i v-if="a.icon" :class="a.icon" />
-        <span>{{ a.label }}</span>
+  <div class="wrap">
+    <div class="actions">
+      <button class="act wear" @click="onLogWear">Log wear</button>
+      <button class="act dirty" @click="onMarkDirty">Mark dirty</button>
+      <button class="act move">
+        <span @click="onMove">→ House {{ otherHouse() }}</span>
       </button>
     </div>
+
     <div
-      class="wt-row__pad"
-      :class="startX !== null && 'wt-row__pad--dragging'"
-      :style="padStyle"
-      @pointerdown="onDown"
-      @pointermove="onMove"
-      @pointerup="onUp"
-      @pointercancel="onUp"
-      @click="handleClick"
+      :ref="setRef"
+      class="row"
+      :style="{ transform: `translateX(${offset}px)` }"
+      @click="onTap"
     >
-      <div
-        v-if="toggleable"
-        class="wt-row__checkbox"
-        :class="checked && 'wt-row__checkbox--checked'"
-      >
-        <template v-if="checked">✓</template>
-      </div>
-      <div class="wt-row__body">
-        <div
-          class="wt-row__name"
-          :class="!isItemClean && 'wt-row__name--dirty'"
-        >
+      <div class="main">
+        <div class="name">
           {{ item.name }}
+          <span v-if="item.house === 'transit'" class="transit">in transit</span>
         </div>
-        <div v-if="showCats" class="wt-row__cats">
-          {{ item.cats.join(' · ') }}
-        </div>
+        <div class="cats">{{ item.categories.join(' · ') || 'Uncategorized' }}</div>
       </div>
-      <div class="wt-row__trailing">
-        <slot name="trailing">
-          <WearMeter :wears="item.w" :lim="item.lim" />
-        </slot>
-      </div>
+      <WearMeter :wears="item.wears" :wear-limit="item.wearLimit" />
+      <span class="state" :class="{ dirtytag: !isClean(item) }">
+        {{ isClean(item) ? '' : 'dirty' }}
+      </span>
     </div>
   </div>
 </template>
+
+<style scoped>
+.wrap {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+}
+.act {
+  border: none;
+  color: #fff;
+  width: 74px;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 4px;
+}
+.act.wear {
+  background: var(--ok);
+}
+.act.dirty {
+  background: var(--accent);
+}
+.act.move {
+  background: var(--ink);
+}
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  background: var(--bg);
+  touch-action: pan-y;
+  will-change: transform;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+}
+.name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transit {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  margin-left: 6px;
+}
+.cats {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.state {
+  width: 0;
+}
+.dirtytag {
+  width: auto;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+</style>

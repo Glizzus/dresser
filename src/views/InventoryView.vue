@@ -1,170 +1,194 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import Button from 'primevue/button'
-import Card from '../components/Card.vue'
-import Header from '../components/Header.vue'
-import ItemRow, { type SwipeAction } from '../components/ItemRow.vue'
-import SectionLabel from '../components/SectionLabel.vue'
-import WearMeter from '../components/WearMeter.vue'
-import { CATEGORIES, atHouse, isClean } from '../lib/data'
-import type { HouseId, HouseSummary, Item } from '../lib/types'
+import { useRouter } from 'vue-router'
+import { useItems, useCategories, useImportItems } from '@/queries'
+import { useUiStore, type InventoryFilter } from '@/stores/ui'
+import { isClean, type AppItem } from '@/lib/types'
+import { exportItems } from '@/repo'
+import { downloadBackup, readBackupFile } from '@/lib/backup'
+import ItemRow from '@/components/ItemRow.vue'
+import SectionLabel from '@/components/SectionLabel.vue'
 
-const props = defineProps<{
-  items: Item[]
-  house: HouseId
-  summaries: Record<HouseId, HouseSummary>
-}>()
+const router = useRouter()
+const ui = useUiStore()
+const { data: items, isLoading } = useItems()
+const { data: categories } = useCategories()
+const importItems = useImportItems()
 
-const emit = defineEmits<{
-  switchHouse: [h: HouseId]
-  markDirty: [id: string]
-  markClean: [id: string]
-  move: [id: string, to: HouseId]
-  openItem: [it: Item]
-  openAdd: []
-}>()
+// Inventory is scoped to the house you're in — consistent with the global
+// switcher and the "move to other house" action. Transit items are shown
+// too (they're heading to a house).
+const here = computed<AppItem[]>(() =>
+  (items.value ?? []).filter(
+    (i) => i.house === ui.currentHouse || i.house === 'transit',
+  ),
+)
 
-type Filter = 'all' | 'clean' | 'dirty' | string
-const filter = ref<Filter>('all')
-
-const pool = computed(() => {
-  let p = props.items.filter((i) => atHouse(i, props.house))
-  if (filter.value === 'clean') p = p.filter(isClean)
-  else if (filter.value === 'dirty') p = p.filter((i) => !isClean(i))
-  else if (filter.value !== 'all') p = p.filter((i) => i.cats.includes(filter.value))
-  return p
+const filtered = computed<AppItem[]>(() => {
+  const f = ui.filter
+  return here.value.filter((i) => {
+    if (f === 'clean') return isClean(i)
+    if (f === 'dirty') return !isClean(i)
+    if (typeof f === 'object') return i.categories.includes(f.category)
+    return true
+  })
 })
 
-const groups = computed(() => {
-  const g: Record<string, Item[]> = {}
-  for (const it of pool.value) {
-    const c = it.cats[0]
-    if (!g[c]) g[c] = []
-    g[c].push(it)
+const grouped = computed(() => {
+  const map = new Map<string, AppItem[]>()
+  for (const item of filtered.value) {
+    const keys = item.categories.length ? item.categories : ['Uncategorized']
+    for (const k of keys) {
+      const arr = map.get(k) ?? []
+      arr.push(item)
+      map.set(k, arr)
+    }
   }
-  return g
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
 })
 
-const catOrder = computed(() => CATEGORIES.filter((c) => groups.value[c]))
-
-const totalClean = computed(
-  () => props.items.filter((i) => atHouse(i, props.house) && isClean(i)).length,
-)
-const totalDirty = computed(
-  () => props.items.filter((i) => atHouse(i, props.house) && !isClean(i)).length,
-)
-
-const swipeActions = (it: Item): SwipeAction[] => [
-  isClean(it)
-    ? { label: 'Dirty', icon: 'pi pi-inbox', onPress: () => emit('markDirty', it.id) }
-    : { label: 'Clean', icon: 'pi pi-check', onPress: () => emit('markClean', it.id) },
-  {
-    label: props.house === 'a' ? '→ B' : '→ A',
-    icon: 'pi pi-arrow-right',
-    danger: true,
-    onPress: () => emit('move', it.id, props.house === 'a' ? 'b' : 'a'),
-  },
-]
-
-const setFilter = (v: Filter) => {
-  const isCategory = v !== 'all' && v !== 'clean' && v !== 'dirty'
-  filter.value = filter.value === v && isCategory ? 'all' : v
+function isActive(f: InventoryFilter) {
+  if (typeof f === 'object' && typeof ui.filter === 'object')
+    return ui.filter.category === f.category
+  return ui.filter === f
 }
 
-const pillSeverity = (active: boolean) => (active ? 'contrast' : 'secondary')
-const pillVariant = (active: boolean) => (active ? undefined : 'outlined' as const)
+const fileInput = ref<HTMLInputElement | null>(null)
+const busy = ref(false)
+
+async function doExport() {
+  busy.value = true
+  try {
+    downloadBackup(await exportItems())
+    ui.pushToast('Backup exported')
+  } finally {
+    busy.value = false
+  }
+}
+async function onFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  busy.value = true
+  try {
+    const parsed = await readBackupFile(file)
+    const n = await importItems.mutateAsync(parsed)
+    ui.pushToast(`Imported ${n} items`)
+  } catch (err) {
+    ui.pushToast(err instanceof Error ? err.message : 'Import failed')
+  } finally {
+    busy.value = false
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
 </script>
 
 <template>
-  <div class="wt-view">
-    <Header
-      title="Inventory"
-      :subtitle="`${totalClean} clean · ${totalDirty} dirty`"
-      :house="house"
-      :summaries="summaries"
-      @set-house="(h) => emit('switchHouse', h)"
-    >
-      <template #trailing>
-        <Button
-          severity="contrast"
-          rounded
-          icon="pi pi-plus"
-          class="wt-inv-add-btn"
-          @click="emit('openAdd')"
-        />
-      </template>
-    </Header>
-
-    <div class="wt-scroll wt-scroll-x wt-pill-scroller--tight">
-      <div class="wt-pill-row">
-        <Button
-          rounded
-          size="small"
-          :severity="pillSeverity(filter === 'all')"
-          :variant="pillVariant(filter === 'all')"
-          label="All"
-          @click="filter = 'all'"
-        />
-        <Button
-          rounded
-          size="small"
-          :severity="pillSeverity(filter === 'clean')"
-          :variant="pillVariant(filter === 'clean')"
-          label="Clean"
-          @click="filter = 'clean'"
-        />
-        <Button
-          rounded
-          size="small"
-          :severity="pillSeverity(filter === 'dirty')"
-          :variant="pillVariant(filter === 'dirty')"
-          label="Dirty"
-          @click="filter = 'dirty'"
-        />
-        <div class="wt-pill-divider" />
-        <Button
-          v-for="c in CATEGORIES"
-          :key="c"
-          rounded
-          size="small"
-          :severity="pillSeverity(filter === c)"
-          :variant="pillVariant(filter === c)"
-          :label="c"
-          @click="setFilter(c)"
-        />
+  <div class="scroll">
+    <div class="toolbar">
+      <div class="filters">
+        <button :class="{ on: isActive('all') }" @click="ui.setFilter('all')">
+          All
+        </button>
+        <button :class="{ on: isActive('clean') }" @click="ui.setFilter('clean')">
+          Clean
+        </button>
+        <button :class="{ on: isActive('dirty') }" @click="ui.setFilter('dirty')">
+          Dirty
+        </button>
+        <button
+          v-for="c in categories ?? []"
+          :key="c.id"
+          :class="{ on: isActive({ category: c.name }) }"
+          @click="ui.setFilter({ category: c.name })"
+        >
+          {{ c.name }}
+        </button>
       </div>
     </div>
 
-    <div class="wt-scroll wt-scroll-y wt-scroll-y--cta">
-      <div v-if="catOrder.length === 0" class="wt-inv-empty">
-        Nothing matches that filter.
-      </div>
-      <div v-for="c in catOrder" :key="c" class="wt-inv-group">
-        <div class="wt-inv-group__header">
-          <SectionLabel inline>{{ c }}</SectionLabel>
-          <span class="wt-inv-group__count">{{ groups[c].length }}</span>
-        </div>
-        <Card inset>
-          <ItemRow
-            v-for="(it, i) in groups[c]"
-            :key="it.id"
-            :item="it"
-            :is-last="i === groups[c].length - 1"
-            :swipe-actions="swipeActions(it)"
-            @open="emit('openItem', it)"
-          >
-            <template #trailing>
-              <button
-                type="button"
-                class="wt-row__trailing-btn"
-                @click.stop="emit('openItem', it)"
-              >
-                <WearMeter :wears="it.w" :lim="it.lim" />
-              </button>
-            </template>
-          </ItemRow>
-        </Card>
-      </div>
+    <p v-if="isLoading" class="muted">Loading…</p>
+    <p v-else-if="grouped.length === 0" class="muted empty">
+      No items here. Tap + to add one.
+    </p>
+
+    <template v-for="[cat, rows] in grouped" :key="cat">
+      <SectionLabel :text="cat" :count="rows.length" />
+      <ItemRow v-for="it in rows" :key="it.id + cat" :item="it" />
+    </template>
+
+    <div class="backup">
+      <button class="btn" :disabled="busy" @click="doExport">Export JSON</button>
+      <button class="btn" :disabled="busy" @click="fileInput?.click()">
+        Import JSON
+      </button>
+      <input
+        ref="fileInput"
+        type="file"
+        accept="application/json"
+        hidden
+        @change="onFile"
+      />
     </div>
   </div>
+
+  <button class="fab" @click="router.push('/inventory/new')" aria-label="Add item">
+    +
+  </button>
 </template>
+
+<style scoped>
+.toolbar {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 6px 0 8px;
+  z-index: 1;
+}
+.filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.filters button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.filters button.on {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.empty {
+  margin-top: 40px;
+  text-align: center;
+}
+.backup {
+  display: flex;
+  gap: 10px;
+  margin: 28px 0 8px;
+}
+.backup .btn {
+  flex: 1;
+  font-size: 0.88rem;
+}
+.fab {
+  position: fixed;
+  right: max(16px, calc(50% - 280px + 16px));
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 1.6rem;
+  line-height: 1;
+  z-index: 40;
+}
+</style>

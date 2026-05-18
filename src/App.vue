@@ -1,143 +1,97 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import Toast from 'primevue/toast'
-import { useToast } from 'primevue/usetoast'
-import BottomNav from './components/BottomNav.vue'
-import { useWardrobe } from './composables/useWardrobe'
-import type { HouseId, Item, Tab } from './lib/types'
-import LaundrySheet from './sheets/LaundrySheet.vue'
-import ItemSheet from './sheets/ItemSheet.vue'
-import InventoryView from './views/InventoryView.vue'
-import StatusView from './views/StatusView.vue'
-import TodayView from './views/TodayView.vue'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { getSession, onAuthChange, supabaseConfigured } from '@/repo'
+import LoginView from '@/views/LoginView.vue'
+import HouseSwitcher from '@/components/HouseSwitcher.vue'
+import BottomNav from '@/components/BottomNav.vue'
+import ToastHost from '@/components/ToastHost.vue'
 
-const {
-  state,
-  summaries,
-  toast,
-  clearToast,
-  logOutfit,
-  doLaundry,
-  markDirty,
-  markClean,
-  moveItem,
-  saveItem,
-  deleteItem,
-  switchHouse,
-} = useWardrobe()
+const router = useRouter()
+const ready = ref(false)
+const signedIn = ref(false)
+let stop: (() => void) | undefined
 
-const tab = ref<Tab>('today')
-const openItem = ref<string | 'new' | null>(null)
-const showLaundry = ref(false)
-
-const currentBadge = computed(() => summaries.value[state.house].warn)
-const editingItem = computed<Item | null>(() => {
-  if (!openItem.value || openItem.value === 'new') return null
-  return state.items.find((i) => i.id === openItem.value) ?? null
-})
-
-const onSwitchHouse = (h: HouseId) => switchHouse(h)
-const onOpenLaundry = () => (showLaundry.value = true)
-const onLaundryConfirm = () => {
-  doLaundry(state.house)
-  showLaundry.value = false
-}
-
-const onItemSave = (it: Partial<Item> & { id?: string }) => {
-  saveItem(it)
-  openItem.value = null
-}
-const onItemDelete = (id: string) => {
-  deleteItem(id)
-  openItem.value = null
-}
-const onItemMarkDirty = (id: string) => {
-  markDirty(id)
-  openItem.value = null
-}
-const onItemMarkClean = (id: string) => {
-  markClean(id)
-  openItem.value = null
-}
-
-const toastService = useToast()
-watch(toast, (t) => {
-  if (!t) return
-  toastService.add({
-    severity:
-      t.kind === 'ok' ? 'success' : t.kind === 'loc' ? 'info' : 'secondary',
-    detail: t.text,
-    life: 4500,
-    closable: true,
+onMounted(async () => {
+  signedIn.value = Boolean(await getSession())
+  ready.value = true
+  stop = onAuthChange((isIn) => {
+    signedIn.value = isIn
   })
-  clearToast()
 })
+onUnmounted(() => stop?.())
+
+function closeSheet() {
+  // Sheets are routes; closing returns to the underlying tab.
+  if (window.history.state?.back) router.back()
+  else router.replace('/inventory')
+}
 </script>
 
 <template>
-  <div class="wt wt-app">
-    <TodayView
-      v-if="tab === 'today'"
-      :items="state.items"
-      :outfits="state.outfits"
-      :house="state.house"
-      :summaries="summaries"
-      @log="logOutfit"
-      @switch-house="onSwitchHouse"
-      @open-laundry="onOpenLaundry"
-    />
-    <InventoryView
-      v-else-if="tab === 'inv'"
-      :items="state.items"
-      :house="state.house"
-      :summaries="summaries"
-      @switch-house="onSwitchHouse"
-      @mark-dirty="markDirty"
-      @mark-clean="markClean"
-      @move="moveItem"
-      @open-item="(it) => (openItem = it.id)"
-      @open-add="openItem = 'new'"
-    />
-    <StatusView
-      v-else
-      :items="state.items"
-      :house="state.house"
-      :summaries="summaries"
-      @switch-house="onSwitchHouse"
-      @open-laundry="onOpenLaundry"
-    />
+  <div v-if="!supabaseConfigured" class="center-screen">
+    <h1>Dresser</h1>
+    <p class="muted">
+      Supabase isn't configured. Copy <code>.env.example</code> to
+      <code>.env.local</code>, fill in your project URL and anon key, then
+      restart the dev server. See the README.
+    </p>
+  </div>
 
-    <div class="wt-nav-anchor">
-      <BottomNav :tab="tab" :status-badge="currentBadge" @set-tab="(t) => (tab = t)" />
-    </div>
+  <div v-else-if="!ready" class="center-screen">
+    <p class="muted">Loading…</p>
+  </div>
 
-    <LaundrySheet
-      v-if="showLaundry"
-      :items="state.items"
-      :house="state.house"
-      @close="showLaundry = false"
-      @confirm="onLaundryConfirm"
-    />
+  <LoginView v-else-if="!signedIn" />
 
-    <ItemSheet
-      v-if="openItem === 'new'"
-      @close="openItem = null"
-      @save="onItemSave"
-      @delete="onItemDelete"
-      @mark-dirty="onItemMarkDirty"
-      @mark-clean="onItemMarkClean"
-    />
-    <ItemSheet
-      v-else-if="editingItem"
-      :key="editingItem.id"
-      :item="editingItem"
-      @close="openItem = null"
-      @save="onItemSave"
-      @delete="onItemDelete"
-      @mark-dirty="onItemMarkDirty"
-      @mark-clean="onItemMarkClean"
-    />
+  <div v-else class="app">
+    <HouseSwitcher />
+    <router-view v-slot="{ Component }">
+      <component :is="Component" />
+    </router-view>
+    <BottomNav />
 
-    <Toast position="top-center" />
+    <!-- Sheets as routes: a slide-up overlay above the current tab. -->
+    <router-view name="sheet" v-slot="{ Component }">
+      <Transition name="fade">
+        <div v-if="Component" class="sheet-backdrop" @click.self="closeSheet">
+          <Transition name="sheet" appear>
+            <div class="sheet-panel">
+              <component :is="Component" @close="closeSheet" />
+            </div>
+          </Transition>
+        </div>
+      </Transition>
+    </router-view>
+
+    <ToastHost />
   </div>
 </template>
+
+<style scoped>
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 18, 0.32);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+.sheet-panel {
+  background: var(--bg);
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 18px 18px 0 0;
+  padding: 8px 16px calc(20px + env(safe-area-inset-bottom));
+}
+code {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+</style>

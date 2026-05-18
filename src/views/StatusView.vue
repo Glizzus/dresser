@@ -1,184 +1,125 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Button from 'primevue/button'
-import Tag from 'primevue/tag'
-import Card from '../components/Card.vue'
-import Header from '../components/Header.vue'
-import SectionLabel from '../components/SectionLabel.vue'
-import { HOUSES, dirtyAt, invariants } from '../lib/data'
-import type {
-  HouseId,
-  HouseSummary,
-  Invariant,
-  Item,
-  Severity,
-} from '../lib/types'
+import { useRouter } from 'vue-router'
+import { useItems } from '@/queries'
+import { useUiStore } from '@/stores/ui'
+import { evaluateStatus } from '@engine/engine.ts'
+import { DEFAULT_INVARIANTS } from '@engine/invariants.ts'
+import StatusCard from '@/components/StatusCard.vue'
+import SectionLabel from '@/components/SectionLabel.vue'
 
-const props = defineProps<{
-  items: Item[]
-  house: HouseId
-  summaries: Record<HouseId, HouseSummary>
-}>()
+const router = useRouter()
+const ui = useUiStore()
+const { data: items, isLoading } = useItems()
 
-const emit = defineEmits<{
-  switchHouse: [h: HouseId]
-  openLaundry: []
-}>()
-
-const grouped = computed(() => {
-  const broken: Invariant[] = []
-  const low: Invariant[] = []
-  const ok: Invariant[] = []
-  const all = invariants(props.items, props.house)
-  for (const i of all) {
-    if (i.severity === 'broken') broken.push(i)
-    else if (i.severity === 'low') low.push(i)
-    else ok.push(i)
-  }
-  return { broken, low, ok, total: all.length, okAll: broken.length + low.length === 0 }
-})
-
-const issueSections = computed(() => [
-  { title: 'Broken', items: grouped.value.broken },
-  { title: 'Running low', items: grouped.value.low },
-])
-
-const dirty = computed(() => dirtyAt(props.items, props.house))
-
-const subtitle = computed(() => {
-  if (grouped.value.okAll) return 'Everything holding'
-  const n = grouped.value.broken.length + grouped.value.low.length
-  return `${n} thing${n === 1 ? '' : 's'} to fix`
-})
-
-const hamperPreview = computed(() =>
-  dirty.value
-    .slice(0, 6)
-    .map((d) => d.name)
-    .join(' · '),
+const status = computed(() =>
+  evaluateStatus(DEFAULT_INVARIANTS, items.value ?? [], ui.currentHouse),
 )
-
-const sevTag = (s: Severity) =>
-  s === 'ok' ? 'success' : s === 'low' ? 'warn' : 'danger'
+const allHolding = computed(() => status.value.brokenCount === 0)
+const hamperCount = computed(() =>
+  status.value.hamper.reduce(
+    (n, g) => n + g.items.length,
+    0,
+  ),
+)
 </script>
 
 <template>
-  <div class="wt-view">
-    <Header
-      title="Status"
-      :subtitle="subtitle"
-      :house="house"
-      :summaries="summaries"
-      @set-house="(h) => emit('switchHouse', h)"
-    />
+  <div class="scroll">
+    <p v-if="isLoading" class="muted">Loading…</p>
 
-    <div class="wt-scroll wt-scroll-y wt-scroll-y--cta-tall">
-      <div class="wt-status-summary">
-        <Card v-if="grouped.okAll" :pad="16" variant="ok">
-          <div class="wt-status-row">
-            <div class="wt-status-headline--ok">All invariants holding</div>
-            <Tag severity="success" :value="`✓ ${grouped.ok.length}/${grouped.total}`" />
-          </div>
-          <div class="wt-status-body wt-status-body--ok">
-            <template v-if="dirty.length === 0">Hamper is empty too.</template>
-            <template v-else>
-              {{ dirty.length }} item{{ dirty.length === 1 ? '' : 's' }} in the hamper · still fine.
-            </template>
-          </div>
-        </Card>
-        <Card v-else :pad="16" variant="warn">
-          <div class="wt-status-row">
-            <div class="wt-status-headline">
-              <template v-if="grouped.broken.length > 0">
-                {{ grouped.broken.length }} invariant{{ grouped.broken.length === 1 ? '' : 's' }} broken
-              </template>
-              <template v-else>{{ grouped.low.length }} running low</template>
-            </div>
-            <Tag
-              :severity="grouped.broken.length > 0 ? 'danger' : 'warn'"
-              :value="grouped.broken.length > 0 ? '!' : 'low'"
-            />
-          </div>
-          <div class="wt-status-body wt-status-body--warn">
-            <template v-if="grouped.broken.length > 0">
-              Wash <b>1 load</b> tonight to fix all of these.
-            </template>
-            <template v-else>Consider a small load soon.</template>
-          </div>
-        </Card>
+    <template v-else>
+      <div class="banner" :class="{ ok: allHolding }">
+        <strong v-if="allHolding">All holding</strong>
+        <strong v-else>
+          {{ status.brokenCount }} invariant{{
+            status.brokenCount === 1 ? '' : 's'
+          }}
+          broken
+        </strong>
+        <span class="sub">House {{ ui.currentHouse }}</span>
       </div>
 
-      <template v-for="section in issueSections" :key="section.title">
-        <div v-if="section.items.length > 0" class="wt-inv-group">
-          <SectionLabel>{{ section.title }}</SectionLabel>
-          <div class="wt-inv-group__body">
-            <Card v-for="i in section.items" :key="i.id" :pad="14" class="wt-issue">
-              <div class="wt-issue__row">
-                <div class="wt-issue__title">
-                  <div class="wt-issue__title-line">
-                    {{ i.have }} / {{ i.need }} {{ i.label }}
-                  </div>
-                  <div class="wt-issue__detail">{{ i.detail }}</div>
-                </div>
-                <Tag :severity="sevTag(i.severity)" :value="i.severity" />
-              </div>
-              <div v-if="i.fix" class="wt-issue__fix">
-                <span class="wt-issue__fix-dot">!</span>
-                <span class="wt-issue__fix-text">{{ i.fix }}</span>
-                <span v-if="i.bottleneck" class="wt-issue__bottleneck">
-                  bottleneck
-                </span>
-              </div>
-            </Card>
-          </div>
-        </div>
+      <template v-if="status.broken.length">
+        <SectionLabel
+          text="Broken"
+          :count="status.broken.length"
+          accent
+        />
+        <StatusCard
+          v-for="r in status.broken"
+          :key="r.id"
+          :result="r"
+        />
       </template>
 
-      <div v-if="grouped.ok.length > 0" class="wt-inv-group wt-inv-group--dim">
-        <SectionLabel>Holding</SectionLabel>
-        <Card inset class="wt-inv-group__body">
-          <div
-            v-for="(i, k) in grouped.ok"
-            :key="i.id"
-            class="wt-holding-row"
-            :class="k === grouped.ok.length - 1 && 'wt-holding-row--last'"
-          >
-            <div>
-              <div class="wt-holding-line">≥{{ i.need }} {{ i.label }}</div>
-              <div class="wt-holding-detail">{{ i.detail }}</div>
-            </div>
-            <Tag severity="success" value="✓" />
-          </div>
-        </Card>
+      <template v-if="status.holding.length">
+        <SectionLabel text="Holding" :count="status.holding.length" />
+        <StatusCard
+          v-for="r in status.holding"
+          :key="r.id"
+          :result="r"
+        />
+      </template>
+
+      <SectionLabel text="Hamper" :count="hamperCount" />
+      <p v-if="hamperCount === 0" class="muted">Hamper is empty.</p>
+      <div v-for="g in status.hamper" :key="g.category" class="hgroup">
+        <div class="hcat">{{ g.category }}</div>
+        <div class="hitems">
+          {{ g.items.map((i) => i.name).join(', ') }}
+        </div>
       </div>
 
-      <div class="wt-inv-group">
-        <SectionLabel>Hamper</SectionLabel>
-        <Card inset :pad="14" class="wt-inv-group__body">
-          <div class="wt-hamper-row">
-            <div class="wt-hamper-count">
-              {{ dirty.length }} item{{ dirty.length === 1 ? '' : 's' }} dirty
-            </div>
-            <div class="wt-hamper-house">{{ HOUSES[house].name }}</div>
-          </div>
-          <div v-if="dirty.length > 0" class="wt-hamper-preview">
-            {{ hamperPreview }}<template v-if="dirty.length > 6">
-              · +{{ dirty.length - 6 }} more
-            </template>
-          </div>
-        </Card>
-      </div>
-    </div>
-
-    <div v-if="dirty.length > 0" class="wt-cta-anchor">
-      <Button
-        fluid
-        size="large"
-        severity="contrast"
-        icon="pi pi-inbox"
-        :label="`Did laundry at ${HOUSES[house].name}`"
-        @click="emit('openLaundry')"
-      />
-    </div>
+      <button
+        class="btn btn-primary laundry"
+        @click="router.push('/status/laundry')"
+      >
+        Did laundry at House {{ ui.currentHouse }}
+      </button>
+    </template>
   </div>
 </template>
+
+<style scoped>
+.banner {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 8px 0 4px;
+}
+.banner.ok {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.banner strong {
+  font-size: 1.1rem;
+}
+.sub {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.hgroup {
+  display: flex;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.hcat {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  min-width: 110px;
+}
+.hitems {
+  flex: 1;
+  font-size: 0.9rem;
+}
+.laundry {
+  width: 100%;
+  margin-top: 24px;
+}
+</style>
