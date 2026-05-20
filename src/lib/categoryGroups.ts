@@ -22,7 +22,7 @@ const MEMBERS: Record<Exclude<CategoryGroup, 'Other'>, string[]> = {
 }
 
 function groupOf(name: string): CategoryGroup {
-  for (const group of ['Tops', 'Bottoms', 'Base layer'] as const) {
+  for (const group of Object.keys(MEMBERS) as Array<keyof typeof MEMBERS>) {
     if (MEMBERS[group].includes(name)) return group
   }
   return 'Other'
