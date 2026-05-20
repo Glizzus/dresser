@@ -64,7 +64,7 @@ function toggle(id: string) {
   text-align: center;
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 6px;
   font-size: 0.86rem;
   color: var(--ink-soft);
