@@ -33,7 +33,7 @@ function toggle(id: string) {
           class="chip"
           :class="{ on: modelValue.includes(c.id) }"
           :data-cat-id="c.id"
-          @click="toggle(c.id)"
+          @click.stop="toggle(c.id)"
         >
           {{ c.name }}
         </button>

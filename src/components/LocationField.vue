@@ -14,7 +14,7 @@ const emit = defineEmits<{ 'update:modelValue': [House] }>()
         type="button"
         :class="['house', { on: modelValue === 'A' }]"
         data-house="A"
-        @click="emit('update:modelValue', 'A')"
+        @click.stop="emit('update:modelValue', 'A')"
       >
         House A
       </button>
@@ -22,7 +22,7 @@ const emit = defineEmits<{ 'update:modelValue': [House] }>()
         type="button"
         :class="['house', { on: modelValue === 'B' }]"
         data-house="B"
-        @click="emit('update:modelValue', 'B')"
+        @click.stop="emit('update:modelValue', 'B')"
       >
         House B
       </button>
@@ -31,7 +31,7 @@ const emit = defineEmits<{ 'update:modelValue': [House] }>()
       type="button"
       :class="['transit', { on: modelValue === 'transit' }]"
       data-house="transit"
-      @click="emit('update:modelValue', 'transit')"
+      @click.stop="emit('update:modelValue', 'transit')"
     >
       in transit
     </button>
