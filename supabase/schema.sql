@@ -72,6 +72,18 @@ begin
   end loop;
 end $$;
 
+-- Role grants. RLS narrows row visibility; grants are still required at the
+-- table level. Supabase auto-grants when tables are created through its UI,
+-- but raw `create table` migrations (like this one) must grant explicitly.
+grant usage on schema public to authenticated;
+
+grant select, insert, update, delete on
+  public.categories,
+  public.items,
+  public.item_categories,
+  public.laundry_events
+to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- "Doing laundry" — reset wears to 0 for every dirty item at a house and
 -- record the event, atomically. Owner-scoped via auth.uid() inside the fn.
@@ -105,6 +117,8 @@ begin
 
   return reset_count;
 end $$;
+
+grant execute on function public.do_laundry(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Seed the default category set for every new user automatically.
