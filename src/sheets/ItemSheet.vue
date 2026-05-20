@@ -1,10 +1,11 @@
 <script setup lang="ts">
+// Edit-only sheet for an existing item. Add-item lives at /inventory/new
+// as a standalone full-screen page.
 import { computed, ref, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   useItems,
   useCategories,
-  useCreateItem,
   useUpdateItem,
   useDeleteItem,
   useMarkClean,
@@ -21,17 +22,14 @@ const ui = useUiStore()
 
 const { data: items } = useItems()
 const { data: categories } = useCategories()
-const createItem = useCreateItem()
 const updateItem = useUpdateItem()
 const deleteItem = useDeleteItem()
 const markClean = useMarkClean()
 const markDirty = useMarkDirty()
 
-const id = computed(() =>
-  route.name === 'item-edit' ? String(route.params.id) : null,
-)
+const id = computed(() => String(route.params.id))
 const existing = computed<AppItem | undefined>(() =>
-  id.value ? items.value?.find((i) => i.id === id.value) : undefined,
+  items.value?.find((i) => i.id === id.value),
 )
 
 const name = ref('')
@@ -59,12 +57,10 @@ const canSave = computed(() => draft.value.name.length > 0)
 
 async function save() {
   if (!canSave.value) return
-  if (id.value) await updateItem.mutateAsync({ id: id.value, draft: draft.value })
-  else await createItem.mutateAsync(draft.value)
+  await updateItem.mutateAsync({ id: id.value, draft: draft.value })
   emit('close')
 }
 async function remove() {
-  if (!id.value) return
   if (!confirm(`Delete "${name.value}"?`)) return
   await deleteItem.mutateAsync(id.value)
   emit('close')
@@ -81,7 +77,7 @@ async function toggleDirty() {
   <div class="sheet">
     <div class="grab" />
     <div class="head">
-      <h2>{{ id ? 'Edit item' : 'New item' }}</h2>
+      <h2>Edit item</h2>
       <button class="x" @click="emit('close')">Done</button>
     </div>
 
@@ -123,10 +119,10 @@ async function toggleDirty() {
     </button>
 
     <button class="btn btn-primary save" :disabled="!canSave" @click="save">
-      {{ id ? 'Save changes' : 'Add item' }}
+      Save changes
     </button>
 
-    <button v-if="id" class="btn delete" @click="remove">Delete item</button>
+    <button class="btn delete" @click="remove">Delete item</button>
   </div>
 </template>
 
