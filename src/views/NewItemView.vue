@@ -52,7 +52,7 @@ async function save() {
     router.replace('/inventory')
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    ui.pushToast(`Couldn’t save: ${message}`)
+    ui.pushToast(`Couldn't save: ${message}`)
   } finally {
     saving.value = false
   }

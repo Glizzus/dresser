@@ -91,7 +91,7 @@ describe('NewItemView', () => {
     await wrapper.get('[data-test="save"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.pushToast).toHaveBeenCalledWith('Couldn’t save: Network down')
+    expect(mocks.pushToast).toHaveBeenCalledWith("Couldn't save: Network down")
     expect(mocks.replace).not.toHaveBeenCalled()
   })
 })
