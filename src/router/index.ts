@@ -1,9 +1,10 @@
-// Minimal router: two tab routes + sheets as routes. Sheets render into a
-// named <router-view name="sheet"> overlaying the tab beneath them, so the
-// tab context stays visible and Back closes the sheet.
+// Minimal router: two tab routes + edit-as-sheet. The add-item flow is a
+// standalone full-screen route (not a sheet), since it's a deliberate piece
+// of work and warrants the heavier container.
 
 import { createRouter, createWebHistory } from 'vue-router'
 import InventoryView from '@/views/InventoryView.vue'
+import NewItemView from '@/views/NewItemView.vue'
 import StatusView from '@/views/StatusView.vue'
 import ItemSheet from '@/sheets/ItemSheet.vue'
 import LaundrySheet from '@/sheets/LaundrySheet.vue'
@@ -20,7 +21,7 @@ export const router = createRouter({
     {
       path: '/inventory/new',
       name: 'item-new',
-      components: { default: InventoryView, sheet: ItemSheet },
+      components: { default: NewItemView },
     },
     {
       path: '/inventory/:id',
