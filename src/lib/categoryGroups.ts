@@ -5,20 +5,15 @@
 
 import type { CategoryRow } from '@/lib/types'
 
-export type CategoryGroup = 'Tops' | 'Bottoms' | 'Base layer' | 'Other'
+export type CategoryGroup = 'Tops' | 'Bottoms' | 'Other'
 
-const GROUP_ORDER: CategoryGroup[] = ['Tops', 'Bottoms', 'Base layer', 'Other']
+const GROUP_ORDER: CategoryGroup[] = ['Tops', 'Bottoms', 'Other']
 
+// Base layers (undershirts, socks, underwear, tank tops) are no longer
+// add-able items — they are bulk Piles, managed from the inventory list.
 const MEMBERS: Record<Exclude<CategoryGroup, 'Other'>, string[]> = {
-  Tops: [
-    'Normal Shirts',
-    'Church Shirts',
-    'Pajama Shirts',
-    'Athletic Shirts',
-    'Tank Tops',
-  ],
+  Tops: ['Normal Shirts', 'Church Shirts', 'Pajama Shirts', 'Athletic Shirts'],
   Bottoms: ['Normal Pants', 'Church Pants', 'Pajama Pants', 'Athletic Shorts'],
-  'Base layer': ['Undershirts', 'Socks', 'Underwear'],
 }
 
 function groupOf(name: string): CategoryGroup {

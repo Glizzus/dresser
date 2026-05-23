@@ -18,7 +18,3 @@ After the article of clothing is added, it should appear in the inventory list, 
 ## Technical notes
 
 The article of clothing should be added to the database so that it persists across app restarts. Use Supabase for the database, and create a table for the articles of clothing with the appropriate columns for name, categories, wears limit, and location.
-
-## Teaching
-
-I am learning UI/UX in my personal time. Elaborate on ANY UI/UX decisions you make in the implementation of this feature, and why you made them. This is a learning opportunity for me, so I want to understand your thought process and the trade-offs you considered when making design decisions. Be less explicit about backend or code-only decisions.

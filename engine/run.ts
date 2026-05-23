@@ -4,7 +4,7 @@
 
 import { evaluateStatus } from './engine.ts';
 import { DEFAULT_INVARIANTS } from './invariants.ts';
-import { FIXTURE } from './fixture.ts';
+import { FIXTURE, PILE_FIXTURE } from './fixture.ts';
 import type { House, InvariantResult } from './types.ts';
 
 function line(): string {
@@ -23,7 +23,7 @@ function printInvariant(r: InvariantResult): void {
 }
 
 function printHouse(house: House): void {
-  const status = evaluateStatus(DEFAULT_INVARIANTS, FIXTURE, house);
+  const status = evaluateStatus(DEFAULT_INVARIANTS, FIXTURE, PILE_FIXTURE, house);
 
   console.log(line());
   console.log(`HOUSE ${house}`);
@@ -59,8 +59,8 @@ printHouse('A');
 printHouse('B');
 
 // Badge counts that the house switcher will show.
-const a = evaluateStatus(DEFAULT_INVARIANTS, FIXTURE, 'A');
-const b = evaluateStatus(DEFAULT_INVARIANTS, FIXTURE, 'B');
+const a = evaluateStatus(DEFAULT_INVARIANTS, FIXTURE, PILE_FIXTURE, 'A');
+const b = evaluateStatus(DEFAULT_INVARIANTS, FIXTURE, PILE_FIXTURE, 'B');
 console.log(line());
 console.log(
   `Switcher badges →  House A: ${a.brokenCount} broken   House B: ${b.brokenCount} broken`,

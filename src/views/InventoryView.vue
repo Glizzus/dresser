@@ -1,19 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useItems, useCategories, useImportItems } from '@/queries'
+import { useItems, useCategories, usePiles, useImportItems } from '@/queries'
 import { useUiStore, type InventoryFilter } from '@/stores/ui'
-import { isClean, type AppItem } from '@/lib/types'
+import { isClean, type AppItem, type AppPile } from '@/lib/types'
 import { exportItems } from '@/repo'
 import { downloadBackup, readBackupFile } from '@/lib/backup'
 import ItemRow from '@/components/ItemRow.vue'
+import PileRow from '@/components/PileRow.vue'
 import SectionLabel from '@/components/SectionLabel.vue'
 
 const router = useRouter()
 const ui = useUiStore()
 const { data: items, isLoading } = useItems()
 const { data: categories } = useCategories()
+const { data: piles } = usePiles()
 const importItems = useImportItems()
+
+// Piles are the four bulk base layers, pinned to the top because they're the
+// most-touched rows. They belong to a real house, so they follow the house
+// switcher. We only surface them under the unfiltered "All" view — the
+// clean/dirty/category filters are about individual garments, and a pile is
+// inherently a mix of both, so it has no single bucket to filter into.
+const housePiles = computed<AppPile[]>(() =>
+  (piles.value ?? []).filter((p) => p.house === ui.currentHouse),
+)
+const showPiles = computed(() => ui.filter === 'all')
 
 // Inventory is scoped to the house you're in — consistent with the global
 // switcher and the "move to other house" action. Transit items are shown
@@ -106,8 +118,13 @@ async function onFile(e: Event) {
       </div>
     </div>
 
+    <template v-if="showPiles && housePiles.length">
+      <SectionLabel text="Base layers" />
+      <PileRow v-for="p in housePiles" :key="p.id" :pile="p" />
+    </template>
+
     <p v-if="isLoading" class="muted">Loading…</p>
-    <p v-else-if="grouped.length === 0" class="muted empty">
+    <p v-else-if="grouped.length === 0 && !(showPiles && housePiles.length)" class="muted empty">
       No items here. Tap + to add one.
     </p>
 

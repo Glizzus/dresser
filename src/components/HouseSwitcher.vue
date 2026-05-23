@@ -3,18 +3,23 @@
 // Tapping the other house means "I arrived there" — transit items then
 // auto-arrive and a dismissible toast reports it.
 import { computed } from 'vue'
-import { useItems, useArriveTransit } from '@/queries'
+import { useItems, usePiles, useArriveTransit } from '@/queries'
 import { useUiStore } from '@/stores/ui'
 import { evaluateStatus } from '@engine/engine.ts'
 import { DEFAULT_INVARIANTS } from '@engine/invariants.ts'
 
 const ui = useUiStore()
 const { data: items } = useItems()
+const { data: piles } = usePiles()
 const arrive = useArriveTransit()
 
 function brokenFor(house: 'A' | 'B') {
-  return evaluateStatus(DEFAULT_INVARIANTS, items.value ?? [], house)
-    .brokenCount
+  return evaluateStatus(
+    DEFAULT_INVARIANTS,
+    items.value ?? [],
+    piles.value ?? [],
+    house,
+  ).brokenCount
 }
 const brokenA = computed(() => brokenFor('A'))
 const brokenB = computed(() => brokenFor('B'))

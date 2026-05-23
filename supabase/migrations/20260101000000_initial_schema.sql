@@ -25,6 +25,20 @@ create table if not exists public.items (
   updated_at timestamptz not null default now()
 );
 
+-- Base layers (underwear, socks, …) are owned in BULK, never named or tracked
+-- individually. One row per (owner, house, kind). Clean is DERIVED (total -
+-- dirty); the CHECK keeps dirty within [0, total] so clean can never go
+-- negative or exceed the total.
+create table if not exists public.piles (
+  id     uuid primary key default gen_random_uuid(),
+  owner  uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  house  text not null check (house in ('A', 'B')),
+  kind   text not null check (kind in ('Underwear', 'Socks', 'Undershirts', 'Tank Tops')),
+  total  integer not null default 0 check (total >= 0),
+  dirty  integer not null default 0 check (dirty >= 0 and dirty <= total),
+  unique (owner, house, kind)
+);
+
 -- Multi-category modelled honestly as a many-to-many join (NOT a JSON column).
 create table if not exists public.item_categories (
   owner       uuid not null default auth.uid() references auth.users (id) on delete cascade,
@@ -43,6 +57,7 @@ create table if not exists public.laundry_events (
 );
 
 create index if not exists items_owner_idx on public.items (owner);
+create index if not exists piles_owner_idx on public.piles (owner);
 create index if not exists item_categories_owner_idx on public.item_categories (owner);
 create index if not exists laundry_events_owner_idx on public.laundry_events (owner);
 
@@ -52,6 +67,7 @@ create index if not exists laundry_events_owner_idx on public.laundry_events (ow
 
 alter table public.categories      enable row level security;
 alter table public.items           enable row level security;
+alter table public.piles           enable row level security;
 alter table public.item_categories enable row level security;
 alter table public.laundry_events  enable row level security;
 
@@ -59,7 +75,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['categories', 'items', 'item_categories', 'laundry_events']
+  foreach t in array array['categories', 'items', 'piles', 'item_categories', 'laundry_events']
   loop
     execute format('drop policy if exists owner_all on public.%I', t);
     execute format(
@@ -80,13 +96,21 @@ grant usage on schema public to authenticated;
 grant select, insert, update, delete on
   public.categories,
   public.items,
+  public.piles,
   public.item_categories,
   public.laundry_events
 to authenticated;
 
 -- ---------------------------------------------------------------------------
--- "Doing laundry" — reset wears to 0 for every dirty item at a house and
--- record the event, atomically. Owner-scoped via auth.uid() inside the fn.
+-- "Doing laundry" — reset wears to 0 for every dirty item at a house AND
+-- empty every pile's hamper (dirty -> 0) at that house, then record the event,
+-- atomically. Owner-scoped via auth.uid() inside the fn.
+--
+-- Returns the total number of dirty THINGS washed: named items reset, plus the
+-- dirty units cleared from piles. (The pile sum is read BEFORE the update,
+-- since UPDATE ... RETURNING would only see the new zeroed values.) The
+-- laundry_events.item_count column stays items-only — piles are bulk and
+-- nameless, so they don't belong in the per-item history.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.do_laundry(target_house text)
@@ -96,6 +120,7 @@ security invoker
 as $$
 declare
   reset_count integer;
+  pile_count  integer;
 begin
   if target_house not in ('A', 'B') then
     raise exception 'do_laundry: house must be A or B, got %', target_house;
@@ -112,19 +137,33 @@ begin
   )
   select count(*) into reset_count from washed;
 
+  select coalesce(sum(dirty), 0) into pile_count
+  from public.piles
+  where owner = auth.uid()
+    and house = target_house
+    and dirty > 0;
+
+  update public.piles
+     set dirty = 0
+   where owner = auth.uid()
+     and house = target_house
+     and dirty > 0;
+
   insert into public.laundry_events (house, item_count)
   values (target_house, reset_count);
 
-  return reset_count;
+  return reset_count + pile_count;
 end $$;
 
 grant execute on function public.do_laundry(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Seed the default category set for every new user automatically.
+-- Seed every new user automatically: garment categories + the four base-layer
+-- piles at both houses (4 kinds x 2 houses = 8 piles, all starting empty).
+-- Base layers are NOT categories anymore — they are piles.
 -- ---------------------------------------------------------------------------
 
-create or replace function public.seed_default_categories()
+create or replace function public.seed_new_user()
 returns trigger
 language plpgsql
 security definer
@@ -137,32 +176,25 @@ begin
     (new.id, 'Normal Pants'),
     (new.id, 'Church Shirts'),
     (new.id, 'Church Pants'),
-    (new.id, 'Undershirts'),
-    (new.id, 'Socks'),
-    (new.id, 'Underwear'),
     (new.id, 'Pajama Shirts'),
     (new.id, 'Pajama Pants'),
     (new.id, 'Athletic Shirts'),
-    (new.id, 'Athletic Shorts'),
-    (new.id, 'Tank Tops')
+    (new.id, 'Athletic Shorts')
   on conflict (owner, name) do nothing;
+
+  insert into public.piles (owner, house, kind)
+  select new.id, h.house, k.kind
+  from (values ('A'), ('B')) as h(house)
+  cross join (values ('Underwear'), ('Socks'), ('Undershirts'), ('Tank Tops')) as k(kind)
+  on conflict (owner, house, kind) do nothing;
+
   return new;
 end $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute function public.seed_default_categories();
+  for each row execute function public.seed_new_user();
 
--- If you created your user BEFORE running this migration, seed yourself once
--- (run while logged into the SQL editor as that user is not needed — replace
--- the email if you prefer):
---   insert into public.categories (owner, name)
---   select u.id, c.name
---   from auth.users u
---   cross join (values
---     ('Normal Shirts'),('Normal Pants'),('Church Shirts'),('Church Pants'),
---     ('Undershirts'),('Socks'),('Underwear'),('Pajama Shirts'),
---     ('Pajama Pants'),('Athletic Shirts'),('Athletic Shorts'),('Tank Tops')
---   ) as c(name)
---   on conflict (owner, name) do nothing;
+-- Replaces the older seed function name, if it exists from a prior migration.
+drop function if exists public.seed_default_categories();

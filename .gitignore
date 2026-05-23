@@ -8,3 +8,7 @@ dev-dist
 .DS_Store
 .vite
 .superpowers/
+
+# Supabase CLI (local-only / generated)
+supabase/.temp/
+supabase/.branches/

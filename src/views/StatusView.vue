@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useItems } from '@/queries'
+import { useItems, usePiles } from '@/queries'
 import { useUiStore } from '@/stores/ui'
 import { evaluateStatus } from '@engine/engine.ts'
 import { DEFAULT_INVARIANTS } from '@engine/invariants.ts'
@@ -11,9 +11,15 @@ import SectionLabel from '@/components/SectionLabel.vue'
 const router = useRouter()
 const ui = useUiStore()
 const { data: items, isLoading } = useItems()
+const { data: piles } = usePiles()
 
 const status = computed(() =>
-  evaluateStatus(DEFAULT_INVARIANTS, items.value ?? [], ui.currentHouse),
+  evaluateStatus(
+    DEFAULT_INVARIANTS,
+    items.value ?? [],
+    piles.value ?? [],
+    ui.currentHouse,
+  ),
 )
 const allHolding = computed(() => status.value.brokenCount === 0)
 const hamperCount = computed(() =>

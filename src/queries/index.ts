@@ -8,11 +8,12 @@ import {
   useQueryClient,
 } from '@tanstack/vue-query'
 import * as repo from '@/repo'
-import type { AppItem, House, ItemDraft } from '@/lib/types'
+import type { AppItem, AppPile, House, ItemDraft } from '@/lib/types'
 import type { BackupItem } from '@/repo'
 
 export const itemsKey = ['items'] as const
 export const categoriesKey = ['categories'] as const
+export const pilesKey = ['piles'] as const
 
 export function useItems() {
   return useQuery<AppItem[]>({
@@ -27,6 +28,20 @@ export function useCategories() {
     queryFn: repo.listCategories,
   })
 }
+
+export function usePiles() {
+  return useQuery<AppPile[]>({
+    queryKey: pilesKey,
+    queryFn: repo.listPiles,
+  })
+}
+
+export const useSetPileCounts = () =>
+  useInvalidatingMutation(
+    (args: { id: string; patch: { total?: number; dirty?: number } }) =>
+      repo.setPileCounts(args.id, args.patch),
+    [pilesKey],
+  )
 
 function useInvalidatingMutation<TArgs>(
   fn: (args: TArgs) => Promise<unknown>,
@@ -71,7 +86,10 @@ export const useDeleteItem = () =>
   useInvalidatingMutation((id: string) => repo.deleteItem(id))
 
 export const useDoLaundry = () =>
-  useInvalidatingMutation((house: 'A' | 'B') => repo.doLaundry(house))
+  useInvalidatingMutation((house: 'A' | 'B') => repo.doLaundry(house), [
+    itemsKey,
+    pilesKey,
+  ])
 
 export const useArriveTransit = () =>
   useInvalidatingMutation((house: 'A' | 'B') => repo.arriveTransit(house))

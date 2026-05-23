@@ -7,6 +7,7 @@ import InventoryView from '@/views/InventoryView.vue'
 import NewItemView from '@/views/NewItemView.vue'
 import StatusView from '@/views/StatusView.vue'
 import ItemSheet from '@/sheets/ItemSheet.vue'
+import PileSheet from '@/sheets/PileSheet.vue'
 import LaundrySheet from '@/sheets/LaundrySheet.vue'
 
 export const router = createRouter({
@@ -22,6 +23,13 @@ export const router = createRouter({
       path: '/inventory/new',
       name: 'item-new',
       components: { default: NewItemView },
+    },
+    {
+      // Must precede /inventory/:id so "pile" isn't swallowed as an item id.
+      path: '/inventory/pile/:id',
+      name: 'pile-edit',
+      components: { default: InventoryView, sheet: PileSheet },
+      props: { sheet: true },
     },
     {
       path: '/inventory/:id',

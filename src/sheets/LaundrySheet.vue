@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// Did-laundry sheet — a per-house action. Shows the hamper grouped by
-// category; commit resets wears to 0 for dirty items at this house and
-// records a laundry_events row. No prediction line (out of scope).
+// Did-laundry sheet — a per-house action. Shows what will be reset: named
+// dirty items grouped by category, plus the dirty count of each base-layer
+// pile. Commit resets wears to 0 for dirty items AND clears pile dirty at this
+// house, and records a laundry_events row.
 import { computed } from 'vue'
-import { useItems, useDoLaundry } from '@/queries'
+import { useItems, usePiles, useDoLaundry } from '@/queries'
 import { useUiStore } from '@/stores/ui'
 import { evaluateStatus } from '@engine/engine.ts'
 import { DEFAULT_INVARIANTS } from '@engine/invariants.ts'
@@ -11,22 +12,39 @@ import { DEFAULT_INVARIANTS } from '@engine/invariants.ts'
 const emit = defineEmits<{ close: [] }>()
 const ui = useUiStore()
 const { data: items } = useItems()
+const { data: piles } = usePiles()
 const doLaundry = useDoLaundry()
 
 const house = computed(() => ui.currentHouse)
 const hamper = computed(
   () =>
-    evaluateStatus(DEFAULT_INVARIANTS, items.value ?? [], house.value).hamper,
+    evaluateStatus(
+      DEFAULT_INVARIANTS,
+      items.value ?? [],
+      piles.value ?? [],
+      house.value,
+    ).hamper,
 )
-const total = computed(() =>
+
+// Piles aren't in the named hamper (they have no names), so the laundry sheet
+// surfaces them itself — otherwise a house with only dirty piles would read
+// "nothing to wash" while Status insists the underwear pile is short.
+const dirtyPiles = computed(() =>
+  (piles.value ?? []).filter((p) => p.house === house.value && p.dirty > 0),
+)
+const itemCount = computed(() =>
   hamper.value.reduce((n, g) => n + g.items.length, 0),
 )
+const pileCount = computed(() =>
+  dirtyPiles.value.reduce((n, p) => n + p.dirty, 0),
+)
+const total = computed(() => itemCount.value + pileCount.value)
 
 async function commit() {
   const n = await doLaundry.mutateAsync(house.value)
   ui.pushToast(
     n > 0
-      ? `Washed ${n} item${n === 1 ? '' : 's'} at House ${house.value}`
+      ? `Washed ${n} thing${n === 1 ? '' : 's'} at House ${house.value}`
       : `Nothing to wash at House ${house.value}`,
   )
   emit('close')
@@ -55,6 +73,10 @@ async function commit() {
           {{ g.items.map((i) => i.name).join(', ') }}
         </div>
       </div>
+      <div v-for="p in dirtyPiles" :key="p.id" class="grp">
+        <div class="cat">{{ p.kind }}</div>
+        <div class="names">{{ p.dirty }} dirty</div>
+      </div>
     </template>
 
     <button
@@ -62,7 +84,7 @@ async function commit() {
       :disabled="total === 0 || doLaundry.isPending.value"
       @click="commit"
     >
-      Wash {{ total }} item{{ total === 1 ? '' : 's' }}
+      Wash {{ total }} thing{{ total === 1 ? '' : 's' }}
     </button>
   </div>
 </template>

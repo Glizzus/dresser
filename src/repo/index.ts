@@ -3,7 +3,15 @@
 // never sees a Postgres row. Returns engine-shaped data.
 
 import { supabase, supabaseConfigured } from '@/lib/supabase'
-import type { AppItem, CategoryRow, House, ItemDraft } from '@/lib/types'
+import { PILE_KINDS } from '@/lib/types'
+import type {
+  AppItem,
+  AppPile,
+  CategoryRow,
+  House,
+  ItemDraft,
+  PileRow,
+} from '@/lib/types'
 
 export { supabaseConfigured }
 
@@ -21,11 +29,8 @@ export function onAuthChange(cb: (signedIn: boolean) => void) {
   return () => data.subscription.unsubscribe()
 }
 
-export async function signInWithEmail(email: string) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin },
-  })
+export async function signIn(email: string, password: string) {
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
 }
 
@@ -42,6 +47,39 @@ export async function listCategories(): Promise<CategoryRow[]> {
     .order('name')
   if (error) throw error
   return data ?? []
+}
+
+// ---- Piles ---------------------------------------------------------------
+// Base layers, owned in bulk. Stored as total + dirty; clean is derived.
+
+const PILE_ORDER = new Map(PILE_KINDS.map((kind, i) => [kind, i]))
+
+export async function listPiles(): Promise<AppPile[]> {
+  const { data, error } = await supabase
+    .from('piles')
+    .select('id, house, kind, total, dirty')
+  if (error) throw error
+  return ((data ?? []) as PileRow[])
+    .map((r) => ({
+      id: r.id,
+      house: r.house,
+      kind: r.kind,
+      total: r.total,
+      dirty: r.dirty,
+    }))
+    .sort((a, b) => (PILE_ORDER.get(a.kind) ?? 0) - (PILE_ORDER.get(b.kind) ?? 0))
+}
+
+/**
+ * Patch a pile's counts. The DB CHECK guarantees 0 <= dirty <= total, so an
+ * out-of-range value is rejected server-side rather than silently clamped.
+ */
+export async function setPileCounts(
+  id: string,
+  patch: { total?: number; dirty?: number },
+): Promise<void> {
+  const { error } = await supabase.from('piles').update(patch).eq('id', id)
+  if (error) throw error
 }
 
 // ---- Items ---------------------------------------------------------------

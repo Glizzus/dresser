@@ -8,10 +8,11 @@ import type {
   Invariant,
   InvariantResult,
   Item,
+  Pile,
   SlotResult,
   StatusResult,
 } from './types.ts';
-import { isClean } from './types.ts';
+import { isClean, isPileKind, pileClean } from './types.ts';
 
 /** Stable freshest-first order: lowest wears first, then name for determinism. */
 function byFreshest(a: Item, b: Item): number {
@@ -20,25 +21,29 @@ function byFreshest(a: Item, b: Item): number {
 }
 
 /**
- * Evaluate ONE invariant against the items at ONE house.
+ * Evaluate ONE invariant against the items + piles at ONE house.
  *
  * 1. Filter to house; split clean vs dirty; bucket clean items by category.
- * 2. Fill every slot `count` times over using DISTINCT clean items,
- *    assigning freshest-first.
+ * 2. Fill every slot `count` times over. A base-layer slot (a pile kind) is
+ *    filled from the pile's clean count; every other slot is filled with
+ *    DISTINCT clean items, assigned freshest-first.
  * 3. Report satisfied, have/need, and on failure the bottleneck slot + an
  *    honest one-line fix.
  *
  * Within ONE invariant, an item is distinct: it can be assigned to at most
- * one slot here (a single physical sock is not two clean pairs). Across
+ * one slot here (a single physical shirt is not two clean shirts). Piles are
+ * counts, not tracked items, so they need no distinctness bookkeeping. Across
  * invariants the reading is independent — see evaluateStatus.
  */
 export function evaluate(
   invariant: Invariant,
   items: Item[],
+  piles: Pile[],
   house: House,
 ): InvariantResult {
   const atHouse = items.filter((i) => i.house === house);
   const clean = atHouse.filter(isClean);
+  const housePiles = piles.filter((p) => p.house === house);
 
   // Distinctness within this invariant: an item, once assigned to a slot,
   // is spent for the rest of THIS evaluation only.
@@ -46,6 +51,17 @@ export function evaluate(
   const slots: SlotResult[] = [];
 
   for (const category of invariant.slots) {
+    if (isPileKind(category)) {
+      const pile = housePiles.find((p) => p.kind === category);
+      const available = pile ? pileClean(pile) : 0;
+      slots.push({
+        category,
+        need: invariant.count,
+        have: Math.min(available, invariant.count),
+      });
+      continue;
+    }
+
     const candidates = clean
       .filter((i) => !used.has(i.id) && i.categories.includes(category))
       .sort(byFreshest)
@@ -81,7 +97,7 @@ export function evaluate(
     need,
     slots,
     bottleneck: { category: bottleneckSlot.category, shortfall },
-    fix: buildFix(bottleneckSlot.category, shortfall, atHouse, house),
+    fix: buildFix(bottleneckSlot.category, shortfall, atHouse, housePiles, house),
   };
 }
 
@@ -97,10 +113,27 @@ function buildFix(
   category: string,
   shortfall: number,
   atHouse: Item[],
+  housePiles: Pile[],
   house: House,
 ): string {
-  const inCategory = atHouse.filter((i) => i.categories.includes(category));
   const noun = category.toLowerCase();
+
+  // Pile bottleneck: same three honest cases, read off the pile's counts.
+  if (isPileKind(category)) {
+    const pile = housePiles.find((p) => p.kind === category);
+    if (!pile || pile.total === 0) {
+      return `No ${noun} at House ${house} — washing can't help; you need some here.`;
+    }
+    if (pile.dirty === 0) {
+      return `Not enough clean ${noun} here, and none in the hamper to wash.`;
+    }
+    if (pile.dirty >= shortfall) {
+      return `Wash ${shortfall} dirty ${noun}.`;
+    }
+    return `Wash all ${pile.dirty} dirty ${noun} (still short ${shortfall - pile.dirty}).`;
+  }
+
+  const inCategory = atHouse.filter((i) => i.categories.includes(category));
 
   if (inCategory.length === 0) {
     return `No ${noun} at House ${house} — washing can't help; you need one here.`;
@@ -131,14 +164,17 @@ function buildFix(
 export function evaluateStatus(
   invariants: Invariant[],
   items: Item[],
+  piles: Pile[],
   house: House,
 ): StatusResult {
-  const results = invariants.map((inv) => evaluate(inv, items, house));
+  const results = invariants.map((inv) => evaluate(inv, items, piles, house));
   const broken = results.filter((r) => !r.satisfied);
   const holding = results.filter((r) => r.satisfied);
 
   // Hamper = dirty items at this house, grouped by category. A multi-category
-  // item appears under every category it belongs to.
+  // item appears under every category it belongs to. Piles are deliberately
+  // absent: they are bulk counts with no names to list, and a broken pile
+  // invariant already carries its own "wash N dirty …" fix line.
   const dirtyHere = items.filter((i) => i.house === house && !isClean(i));
   const byCategory = new Map<string, Item[]>();
   for (const item of dirtyHere) {

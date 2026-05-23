@@ -1,0 +1,5 @@
+-- supabase/seed.sql — loaded by `supabase db reset` after migrations.
+--
+-- Intentionally empty: Dresser has no global seed data. Per-user data
+-- (categories + base-layer piles) is seeded by the public.seed_new_user()
+-- trigger on auth.users insert — see supabase/schemas/04_seed.sql.

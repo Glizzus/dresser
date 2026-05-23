@@ -5,18 +5,17 @@ import type { CategoryRow } from '@/lib/types'
 const cat = (id: string, name: string): CategoryRow => ({ id, name })
 
 describe('groupCategories', () => {
-  it('returns groups in fixed display order: Tops, Bottoms, Base layer', () => {
+  it('returns groups in fixed display order: Tops, Bottoms', () => {
     const result = groupCategories([
-      cat('1', 'Socks'),
+      cat('1', 'Athletic Shorts'),
       cat('2', 'Normal Pants'),
       cat('3', 'Normal Shirts'),
     ])
-    expect(result.map((g) => g.group)).toEqual(['Tops', 'Bottoms', 'Base layer'])
+    expect(result.map((g) => g.group)).toEqual(['Tops', 'Bottoms'])
   })
 
   it('orders categories within a group by the canonical sequence', () => {
     const result = groupCategories([
-      cat('a', 'Tank Tops'),
       cat('b', 'Normal Shirts'),
       cat('c', 'Pajama Shirts'),
       cat('d', 'Athletic Shirts'),
@@ -28,7 +27,6 @@ describe('groupCategories', () => {
       'Church Shirts',
       'Pajama Shirts',
       'Athletic Shirts',
-      'Tank Tops',
     ])
   })
 

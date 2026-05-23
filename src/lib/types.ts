@@ -5,6 +5,8 @@
 export type {
   House,
   Item,
+  Pile,
+  PileKind,
   Invariant,
   InvariantResult,
   SlotResult,
@@ -12,9 +14,9 @@ export type {
   HamperGroup,
   StatusResult,
 } from '@engine/types.ts'
-export { isClean } from '@engine/types.ts'
+export { isClean, pileClean, isPileKind, PILE_KINDS } from '@engine/types.ts'
 
-import type { Item } from '@engine/types.ts'
+import type { Item, Pile } from '@engine/types.ts'
 
 /**
  * The app's item: the engine's Item plus the category IDs needed by the
@@ -39,6 +41,20 @@ export interface ItemRow {
 export interface CategoryRow {
   id: string
   name: string
+}
+
+/** The app's pile: the engine's Pile plus the row id needed to mutate it. */
+export interface AppPile extends Pile {
+  id: string
+}
+
+/** Raw Postgres row shape for a pile (repo layer only). */
+export interface PileRow {
+  id: string
+  house: 'A' | 'B'
+  kind: Pile['kind']
+  total: number
+  dirty: number
 }
 
 export interface ItemCategoryRow {

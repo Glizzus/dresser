@@ -14,6 +14,29 @@ export interface Item {
 }
 
 /**
+ * Base layers we own in BULK and never name individually: underwear, socks,
+ * etc. A pile is a count at one house, not a set of tracked garments. The four
+ * kinds are hardcoded — they are the commonplace staples, fixed for this app.
+ */
+export const PILE_KINDS = ['Underwear', 'Socks', 'Undershirts', 'Tank Tops'] as const;
+export type PileKind = (typeof PILE_KINDS)[number];
+
+export interface Pile {
+  kind: PileKind;
+  /** Piles live at a real house only — never 'transit'. */
+  house: 'A' | 'B';
+  total: number;
+  dirty: number;
+}
+
+/** Clean is DERIVED: a pile only stores total + dirty. */
+export const pileClean = (p: Pile): number => p.total - p.dirty;
+
+/** Whether an invariant slot is filled from a pile rather than named items. */
+export const isPileKind = (category: string): category is PileKind =>
+  (PILE_KINDS as readonly string[]).includes(category);
+
+/**
  * Invariants are DECLARATIVE DATA. Every invariant has this exact shape
  * and is run through the one evaluator. They vary in data, not behavior.
  */

@@ -7,7 +7,7 @@ const OPTIONS: CategoryRow[] = [
   { id: 't1', name: 'Normal Shirts' },
   { id: 't2', name: 'Church Shirts' },
   { id: 'b1', name: 'Normal Pants' },
-  { id: 's1', name: 'Socks' },
+  { id: 's1', name: 'Athletic Shorts' },
 ]
 
 describe('GroupedCategoryPicker', () => {
@@ -16,7 +16,7 @@ describe('GroupedCategoryPicker', () => {
       props: { modelValue: [], options: OPTIONS },
     })
     const labels = wrapper.findAll('[data-group-label]').map((n) => n.text())
-    expect(labels).toEqual(['Tops', 'Bottoms', 'Base layer'])
+    expect(labels).toEqual(['Tops', 'Bottoms'])
   })
 
   it('marks selected chips with the "on" class', () => {
